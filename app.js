@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  const QUESTIONS_PER_ROUND = 12;
+  const QUESTIONS_PER_ROUND = 20;
 
   const TYPE_LABELS = {
     simple10: "1–10 簡單加法",
@@ -16,18 +16,19 @@
     compose: "組合數式",
   };
 
+  // make10 near-zero on mid/hard; easy only occasional. Prefer simple20 (crossing 10, doubles).
   const DIFF = {
     easy: {
       label: "易",
-      weights: { simple10: 5, make10: 4, simple20: 2, missing: 1, compose: 0, triple: 0 },
+      weights: { simple10: 5, make10: 1, simple20: 6, missing: 1, compose: 0, triple: 0 },
     },
     mid: {
       label: "中",
-      weights: { simple10: 1, simple20: 3, make10: 2, missing: 3, compose: 3, triple: 0 },
+      weights: { simple10: 1, simple20: 6, make10: 0, missing: 3, compose: 3, triple: 0 },
     },
     hard: {
       label: "難",
-      weights: { simple10: 0, simple20: 1, make10: 1, missing: 2, compose: 4, triple: 4 },
+      weights: { simple10: 0, simple20: 4, make10: 0, missing: 2, compose: 4, triple: 4 },
     },
   };
 
@@ -429,8 +430,21 @@
 
   // —— Question generators ——
   function genSimple10() {
-    const a = randInt(1, 9);
-    const b = randInt(1, 10 - a);
+    // Bias: both addends ≥ 4 when possible (e.g. 4+5, 5+5, 6+4); still within 1–10.
+    let a, b;
+    if (Math.random() < 0.7) {
+      a = randInt(4, 6);
+      b = randInt(4, 10 - a);
+    } else {
+      a = randInt(1, 9);
+      b = randInt(1, 10 - a);
+    }
+    if (Math.random() < 0.2) {
+      // Occasional double within 1–10 (e.g. 4+4, 5+5)
+      const d = randInt(4, 5);
+      a = d;
+      b = d;
+    }
     const ans = a + b;
     return {
       type: "simple10",
@@ -442,9 +456,35 @@
   }
 
   function genSimple20() {
-    let a = randInt(1, 19);
-    let b = randInt(1, 20 - a);
-    if (a + b < 5) b = Math.min(20 - a, b + 3);
+    // Prefer both ≥ 4, sums 11–20 (crossing ten), and occasional doubles (6+6, 7+7, 8+8).
+    let a, b;
+    const roll = Math.random();
+    if (roll < 0.18) {
+      // Doubles: 5+5 … 9+9 (sums 10–18)
+      const d = randInt(5, 9);
+      a = d;
+      b = d;
+    } else if (roll < 0.85) {
+      // Crossing / general: both ≥ 4, sum 11–20
+      a = randInt(4, 9);
+      const minB = Math.max(4, 11 - a);
+      const maxB = Math.min(9, 20 - a);
+      if (minB <= maxB) {
+        b = randInt(minB, maxB);
+      } else {
+        b = randInt(4, Math.min(9, 20 - a));
+      }
+    } else {
+      // Occasional wider range still within 1–20
+      a = randInt(3, 12);
+      b = randInt(3, Math.min(12, 20 - a));
+      if (a + b < 8) b = Math.min(20 - a, Math.max(b, 8 - a));
+    }
+    // Avoid pure make-ten pairs most of the time (those are rare make10 type)
+    if (a + b === 10 && a !== b && Math.random() < 0.7) {
+      b = Math.min(9, b + randInt(1, 3));
+      if (a + b > 20) b = 20 - a;
+    }
     const ans = a + b;
     return {
       type: "simple20",
@@ -630,8 +670,9 @@
       ensureType(qs, "compose", weights, diffKey);
     }
     if (diffKey === "easy") {
-      ensureType(qs, "make10", weights, diffKey);
       ensureType(qs, "simple10", weights, diffKey);
+      ensureType(qs, "simple20", weights, diffKey);
+      ensureType(qs, "make10", weights, diffKey);
     }
     return shuffle(qs);
   }
