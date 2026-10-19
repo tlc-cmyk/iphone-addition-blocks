@@ -1010,65 +1010,180 @@
     return q;
   }
 
+  // —— Round dedupe (avoid repeat prompts / near-identical equations) ——
+  const DEDUPE_RETRIES = 28;
+
+  /** Stable key: treat a+b and b+a as the same for simple addition. */
+  function questionKey(q) {
+    if (!q) return "";
+    const type = q.type;
+    if (type === "compose") {
+      const parts = (q.solution || []).slice().sort((a, b) => a - b);
+      return parts.length
+        ? `compose:${q.target}:${parts.join("+")}`
+        : `compose:${q.target}`;
+    }
+    if (type === "make10") {
+      const m = String(q.prompt || "").match(/(\d+)/);
+      return m ? `make10:${m[1]}` : `make10:${q.answer}`;
+    }
+    if (type === "missing") {
+      const nums = (String(q.prompt || "").match(/\d+/g) || []).map(Number);
+      if (nums.length >= 2) {
+        const known = nums[0];
+        const sum = nums[1];
+        const missing = q.answer;
+        const lo = Math.min(missing, known);
+        const hi = Math.max(missing, known);
+        return `missing:${lo}+${hi}=${sum}`;
+      }
+      return `missing:${q.prompt}`;
+    }
+    if (type === "triple") {
+      const nums = (String(q.prompt || "").match(/\d+/g) || []).map(Number);
+      if (nums.length >= 3) {
+        return `triple:${nums.slice(0, 3).sort((a, b) => a - b).join("+")}`;
+      }
+      return `triple:${q.prompt}`;
+    }
+    if (type === "numberSense") {
+      return `numberSense:${q.answer}:${q.prompt || ""}`;
+    }
+    // simple10 / simple20 / doubles / cross10 — canonical sorted a+b
+    const nums = (String(q.prompt || "").match(/\d+/g) || []).map(Number);
+    if (nums.length >= 2) {
+      const lo = Math.min(nums[0], nums[1]);
+      const hi = Math.max(nums[0], nums[1]);
+      return `add:${lo}+${hi}`;
+    }
+    return `${type}:${q.prompt || q.answer}`;
+  }
+
+  function similarToPrev(prev, q) {
+    if (!prev || !q) return false;
+    if (questionKey(prev) === questionKey(q)) return true;
+    if (prev.type === q.type && prev.answer != null && q.answer != null && prev.answer === q.answer) {
+      return true;
+    }
+    if (prev.type === "compose" && q.type === "compose" && prev.target === q.target) {
+      return true;
+    }
+    return false;
+  }
+
+  /** Retry factory until key unused (and not too similar to previous); then rare fallback. */
+  function generateUnique(factory, usedKeys, lastQ) {
+    let q = factory();
+    let key = questionKey(q);
+    for (let attempt = 0; attempt < DEDUPE_RETRIES; attempt++) {
+      q = attempt === 0 ? q : factory();
+      key = questionKey(q);
+      if (usedKeys.has(key)) continue;
+      // First half of retries also avoid consecutive similar feel
+      if (lastQ && attempt < Math.floor(DEDUPE_RETRIES / 2) && similarToPrev(lastQ, q)) continue;
+      usedKeys.add(key);
+      return q;
+    }
+    // Cap hit: allow rare duplicate rather than hanging
+    usedKeys.add(key);
+    return q;
+  }
+
+  /** After shuffle, swap neighbors that still feel back-to-back similar. */
+  function softenConsecutive(qs) {
+    for (let i = 1; i < qs.length; i++) {
+      if (!similarToPrev(qs[i - 1], qs[i])) continue;
+      for (let j = i + 1; j < qs.length; j++) {
+        if (similarToPrev(qs[i - 1], qs[j])) continue;
+        if (i + 1 < qs.length && similarToPrev(qs[j], qs[i + 1])) continue;
+        const tmp = qs[i];
+        qs[i] = qs[j];
+        qs[j] = tmp;
+        break;
+      }
+    }
+    return qs;
+  }
+
   function buildLessonQuestions(lessonId) {
     const qs = [];
     const n = LESSONS_PER_PRACTICE;
+    const usedKeys = new Set();
+    const pushUnique = (factory) => {
+      const lastQ = qs.length ? qs[qs.length - 1] : null;
+      qs.push(generateUnique(factory, usedKeys, lastQ));
+    };
     if (lessonId === 1) {
-      for (let i = 0; i < n; i++) qs.push(genNumberSense());
+      for (let i = 0; i < n; i++) pushUnique(() => genNumberSense());
     } else if (lessonId === 2) {
       for (let i = 0; i < n; i++) {
-        const q = genSimple10();
         // Bias more objects for lesson 2
-        qs.push(applyDisplayMode(q, "easy"));
+        pushUnique(() => applyDisplayMode(genSimple10(), "easy"));
       }
     } else if (lessonId === 3) {
-      for (let i = 0; i < n; i++) qs.push(applyDisplayMode(genDoubles(), "easy"));
+      for (let i = 0; i < n; i++) pushUnique(() => applyDisplayMode(genDoubles(), "easy"));
     } else if (lessonId === 4) {
-      for (let i = 0; i < n; i++) qs.push(applyDisplayMode(genCross10(), "mid"));
+      for (let i = 0; i < n; i++) pushUnique(() => applyDisplayMode(genCross10(), "mid"));
     } else if (lessonId === 5) {
       for (let i = 0; i < n; i++) {
-        const q = i % 2 === 0 ? genLearnMissing() : genLearnTriple();
-        qs.push(applyDisplayMode(q, "mid"));
+        const preferMissing = i % 2 === 0;
+        pushUnique(() => {
+          const q = preferMissing ? genLearnMissing() : genLearnTriple();
+          return applyDisplayMode(q, "mid");
+        });
       }
     } else if (lessonId === 6) {
-      for (let i = 0; i < n; i++) qs.push(genLearnCompose());
+      for (let i = 0; i < n; i++) pushUnique(() => genLearnCompose());
     }
-    return shuffle(qs);
+    return softenConsecutive(shuffle(qs));
   }
 
 
   function buildRound(diffKey) {
     const weights = DIFF[diffKey].weights;
     const qs = [];
-    const typeCounts = {};
+    const usedKeys = new Set();
     for (let i = 0; i < QUESTIONS_PER_ROUND; i++) {
       const t = pickWeighted(weights);
-      typeCounts[t] = (typeCounts[t] || 0) + 1;
-      qs.push(applyDisplayMode(GENERATORS[t](), diffKey));
+      const lastQ = qs.length ? qs[qs.length - 1] : null;
+      qs.push(
+        generateUnique(
+          () => applyDisplayMode(GENERATORS[t](), diffKey),
+          usedKeys,
+          lastQ
+        )
+      );
     }
     // Ensure variety: if mid/hard missing compose or triple, force inject
     if (diffKey === "mid") {
-      ensureType(qs, "missing", weights, diffKey);
-      ensureType(qs, "compose", weights, diffKey);
-      ensureType(qs, "simple20", weights, diffKey);
+      ensureType(qs, "missing", weights, diffKey, usedKeys);
+      ensureType(qs, "compose", weights, diffKey, usedKeys);
+      ensureType(qs, "simple20", weights, diffKey, usedKeys);
     }
     if (diffKey === "hard") {
-      ensureType(qs, "triple", weights, diffKey);
-      ensureType(qs, "missing", weights, diffKey);
-      ensureType(qs, "compose", weights, diffKey);
+      ensureType(qs, "triple", weights, diffKey, usedKeys);
+      ensureType(qs, "missing", weights, diffKey, usedKeys);
+      ensureType(qs, "compose", weights, diffKey, usedKeys);
     }
     if (diffKey === "easy") {
-      ensureType(qs, "simple10", weights, diffKey);
-      ensureType(qs, "simple20", weights, diffKey);
-      ensureType(qs, "make10", weights, diffKey);
+      ensureType(qs, "simple10", weights, diffKey, usedKeys);
+      ensureType(qs, "simple20", weights, diffKey, usedKeys);
+      ensureType(qs, "make10", weights, diffKey, usedKeys);
     }
-    return shuffle(qs);
+    return softenConsecutive(shuffle(qs));
   }
 
-  function ensureType(qs, type, weights, diffKey) {
+  function ensureType(qs, type, weights, diffKey, usedKeys) {
     if (weights[type] <= 0) return;
     if (qs.some((q) => q.type === type)) return;
-    qs[randInt(0, qs.length - 1)] = applyDisplayMode(GENERATORS[type](), diffKey || state.diff || "mid");
+    const idx = randInt(0, qs.length - 1);
+    if (usedKeys) usedKeys.delete(questionKey(qs[idx]));
+    const keys = usedKeys || new Set();
+    qs[idx] = generateUnique(
+      () => applyDisplayMode(GENERATORS[type](), diffKey || state.diff || "mid"),
+      keys,
+      null
+    );
   }
 
 
