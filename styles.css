@@ -127,12 +127,14 @@ body {
 .diff-text strong { font-size: 1.25rem; font-weight: 800; }
 .diff-text small { font-size: 0.8rem; color: var(--muted); }
 .diff-q {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  padding: 6px 10px;
+  padding: 6px 8px;
   border-radius: 999px;
   background: #f3f0ff;
   color: var(--bg1);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .diff-btn.easy { border-left: 6px solid var(--easy); }
 .diff-btn.mid { border-left: 6px solid var(--mid); }
@@ -202,47 +204,131 @@ body {
   flex-shrink: 0;
 }
 .icon-btn:active { background: rgba(255,255,255,0.28); }
-.progress-wrap { flex: 1; }
-.progress-track {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.2);
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  width: 0%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #fbbf24, #f97316);
-  transition: width 0.3s ease;
-}
+.progress-wrap { flex: 1; text-align: center; }
 .progress-text {
   display: block;
-  margin-top: 4px;
-  font-size: 0.75rem;
-  opacity: 0.8;
-  text-align: center;
+  font-size: 0.8rem;
+  opacity: 0.9;
+  font-weight: 700;
 }
-.star-chip {
+
+/* —— Car race HUD —— */
+.race-hud {
+  margin: 0 0 10px;
+  padding: 10px 12px 8px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.18);
+}
+.race-timer {
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-width: 56px;
   justify-content: center;
-  padding: 8px 12px;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(251, 191, 36, 0.2);
+  background: rgba(15, 23, 42, 0.35);
   font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+.race-timer.urgent {
+  background: rgba(220, 38, 38, 0.45);
+  animation: timerPulse 0.8s ease infinite;
+}
+.race-timer.hidden-timer { display: none; }
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.timer-icon { font-size: 1rem; }
+.car-track { width: 100%; }
+.track-road {
+  position: relative;
+  height: 44px;
+  border-radius: 14px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      #374151 0 14px,
+      #4b5563 14px 28px
+    );
+  border: 2px solid rgba(255,255,255,0.35);
+  overflow: hidden;
+  box-shadow: inset 0 -6px 0 rgba(0,0,0,0.18);
+}
+.track-lane {
+  position: absolute;
+  left: 8%;
+  right: 10%;
+  top: 50%;
+  height: 3px;
+  margin-top: -1px;
+  background: repeating-linear-gradient(
+    90deg,
+    #fde047 0 10px,
+    transparent 10px 18px
+  );
+  opacity: 0.85;
+  pointer-events: none;
+}
+.track-car {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translate(-10%, -58%);
+  transition: left 0.45s cubic-bezier(0.22, 1.2, 0.36, 1);
+  z-index: 2;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35));
+}
+.track-car.bump {
+  animation: carBump 0.45s ease;
+}
+@keyframes carBump {
+  0% { transform: translate(-10%, -58%) scale(1); }
+  40% { transform: translate(-10%, -68%) scale(1.12); }
+  100% { transform: translate(-10%, -58%) scale(1); }
+}
+.car-svg { display: block; }
+.finish-flag {
+  position: absolute;
+  right: 4px;
+  top: 2px;
+  bottom: 2px;
+  width: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 1;
+}
+.flag-pole {
+  width: 3px;
+  flex: 1;
+  background: #f8fafc;
+  border-radius: 2px;
+  opacity: 0.9;
+}
+.flag-cloth {
+  position: absolute;
+  top: 0;
   font-size: 1.05rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35));
 }
-.star-icon { color: var(--star); font-size: 1.15rem; }
-.star-chip.star-pop {
-  animation: starPop 0.55s ease;
+.race-meta {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.92;
 }
-@keyframes starPop {
-  0% { transform: scale(1); background: rgba(251, 191, 36, 0.2); }
-  35% { transform: scale(1.18); background: rgba(251, 191, 36, 0.55); }
-  100% { transform: scale(1); background: rgba(251, 191, 36, 0.2); }
+.car-track.finished .track-road {
+  box-shadow: inset 0 -6px 0 rgba(0,0,0,0.18), 0 0 0 2px #fbbf24;
+}
+.car-track.finished .race-meta {
+  color: #fde68a;
 }
 
 
@@ -415,15 +501,40 @@ body {
   margin-bottom: 16px;
   font-size: 1rem;
 }
-.end-stars {
-  display: flex;
-  gap: 8px;
-  font-size: 2.2rem;
-  color: var(--star);
-  margin-bottom: 12px;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+.end-race {
+  width: 100%;
+  margin-bottom: 14px;
 }
-.end-stars .dim { opacity: 0.25; filter: grayscale(1); }
+.end-race-track {
+  position: relative;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, #374151, #4b5563 70%, #1f2937);
+  border: 2px solid rgba(255,255,255,0.3);
+  margin: 0 auto 8px;
+  max-width: 280px;
+  overflow: hidden;
+}
+.end-race-car {
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  transform: translateY(-50%);
+  font-size: 1.6rem;
+  transition: left 0.6s ease;
+}
+.end-race-flag {
+  position: absolute;
+  right: 8px;
+  top: 6px;
+  font-size: 1.2rem;
+}
+.end-race-label {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #fde68a;
+}
+.end-race.won .end-race-label { color: #86efac; }
 .end-score {
   font-size: 1.15rem;
   font-weight: 700;
@@ -1014,11 +1125,12 @@ body {
   font-size: 1.35rem;
   line-height: 1;
 }
-.lesson-card .lesson-stars-mini {
-  font-size: 0.7rem;
-  color: var(--star);
+.lesson-card .lesson-stars-mini,
+.lesson-card .lesson-race-mini {
+  font-size: 0.72rem;
+  color: #fde68a;
   margin-top: 4px;
-  letter-spacing: 1px;
+  font-weight: 700;
 }
 
 /* —— Teach —— */

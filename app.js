@@ -5,7 +5,9 @@
 (function () {
   "use strict";
 
-  const QUESTIONS_PER_ROUND = 20;
+  const QUESTIONS_PER_ROUND = 30;
+  const FINISH_CORRECT = 20; // free practice: car crosses finish after this many correct
+  const TIMER_SECONDS = { easy: 180, mid: 240, hard: 300 };
 
   const TYPE_LABELS = {
     simple10: "1–10 簡單加法",
@@ -40,12 +42,19 @@
     diff: null,
     questions: [],
     index: 0,
-    stars: 0,
+    stars: 0, // kept for learn best-score compat (= correct cells)
     correct: 0,
     locked: false,
     mode: "practice", // "practice" | "learn"
     lessonId: null,
     teachStep: 0,
+    finishAt: FINISH_CORRECT,
+    timerSeconds: 0,
+    timerLeft: 0,
+    timerId: null,
+    endReason: null, // "finish" | "questions" | "time" | null
+    racedFinished: false,
+    ended: false,
   };
 
   // —— Learn Zone curriculum ——
@@ -1062,6 +1071,123 @@
     qs[randInt(0, qs.length - 1)] = applyDisplayMode(GENERATORS[type](), diffKey || state.diff || "mid");
   }
 
+
+  // —— Car race + timer ——
+  function stopTimer() {
+    if (state.timerId != null) {
+      clearInterval(state.timerId);
+      state.timerId = null;
+    }
+  }
+
+  function formatTimerLabel(sec) {
+    const s = Math.max(0, sec | 0);
+    if (s >= 60) {
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      if (r === 0) return "仲有 " + m + " 分鐘";
+      return "仲有 " + m + " 分 " + r + " 秒";
+    }
+    return "仲有 " + s + " 秒";
+  }
+
+  function updateTimerUI() {
+    const wrap = $("race-timer");
+    const text = $("timer-text");
+    if (!wrap || !text) return;
+    if (state.mode !== "practice" || !state.timerSeconds) {
+      wrap.hidden = true;
+      wrap.classList.remove("urgent");
+      return;
+    }
+    wrap.hidden = false;
+    text.textContent = formatTimerLabel(state.timerLeft);
+    wrap.classList.toggle("urgent", state.timerLeft <= 30 && state.timerLeft > 0);
+  }
+
+  function startTimer() {
+    stopTimer();
+    if (state.mode !== "practice" || !state.timerSeconds) {
+      updateTimerUI();
+      return;
+    }
+    state.timerLeft = state.timerSeconds;
+    updateTimerUI();
+    state.timerId = setInterval(() => {
+      if (state.locked && state.endReason) return;
+      state.timerLeft -= 1;
+      updateTimerUI();
+      if (state.timerLeft <= 0) {
+        stopTimer();
+        state.timerLeft = 0;
+        updateTimerUI();
+        if (!state.ended) {
+          state.endReason = "time";
+          state.locked = true;
+          showEnd();
+        }
+      }
+    }, 1000);
+  }
+
+  function raceFinishAt() {
+    return state.finishAt || FINISH_CORRECT;
+  }
+
+  function updateRaceUI(animate) {
+    const finishAt = raceFinishAt();
+    const cells = Math.min(state.correct, finishAt);
+    const label = $("race-label");
+    const car = $("track-car");
+    const track = $("car-track");
+    if (label) {
+      if (state.racedFinished || state.correct >= finishAt) {
+        label.textContent = "衝線喇！ " + cells + " / " + finishAt + " 格";
+      } else {
+        label.textContent = cells + " / " + finishAt + " 格";
+      }
+    }
+    if (car) {
+      // 0 correct → near start (~4%); finishAt → near flag (~88%)
+      const pct = finishAt <= 0 ? 4 : 4 + (cells / finishAt) * 84;
+      car.style.left = pct + "%";
+      if (animate) {
+        car.classList.remove("bump");
+        void car.offsetWidth;
+        car.classList.add("bump");
+      }
+    }
+    if (track) {
+      track.classList.toggle("finished", !!(state.racedFinished || state.correct >= finishAt));
+    }
+  }
+
+  function onCorrectProgress() {
+    state.stars += 1;
+    state.correct += 1;
+    updateRaceUI(true);
+    const finishAt = raceFinishAt();
+    if (state.correct >= finishAt) {
+      state.racedFinished = true;
+      state.endReason = "finish";
+      return true; // should end round as win
+    }
+    return false;
+  }
+
+  function shouldAdvanceOrEnd(ok) {
+    if (state.ended) return "end";
+    const total = state.questions.length;
+    if (state.endReason === "finish" || state.racedFinished) {
+      return "end";
+    }
+    if (state.index + 1 >= total) {
+      if (!state.endReason) state.endReason = "questions";
+      return "end";
+    }
+    return "next";
+  }
+
   // —— Screens ——
   function showScreen(name) {
     Object.values(screens).forEach((s) => s.classList.remove("active"));
@@ -1071,6 +1197,7 @@
   function startGame(diff) {
     unlockAudio();
     SFX.blip();
+    stopTimer();
     state.mode = "practice";
     state.lessonId = null;
     state.diff = diff;
@@ -1079,14 +1206,22 @@
     state.stars = 0;
     state.correct = 0;
     state.locked = false;
-    $("star-count").textContent = "0";
+    state.finishAt = FINISH_CORRECT;
+    state.timerSeconds = TIMER_SECONDS[diff] || 180;
+    state.timerLeft = state.timerSeconds;
+    state.endReason = null;
+    state.racedFinished = false;
+    state.ended = false;
     showScreen("play");
+    updateRaceUI(false);
+    startTimer();
     renderQuestion();
   }
 
   function startLessonPractice(lessonId) {
     unlockAudio();
     SFX.blip();
+    stopTimer();
     state.mode = "learn";
     state.lessonId = lessonId;
     state.diff = "learn";
@@ -1095,8 +1230,15 @@
     state.stars = 0;
     state.correct = 0;
     state.locked = false;
-    $("star-count").textContent = "0";
+    state.finishAt = state.questions.length || LESSONS_PER_PRACTICE;
+    state.timerSeconds = 0;
+    state.timerLeft = 0;
+    state.endReason = null;
+    state.racedFinished = false;
+    state.ended = false;
     showScreen("play");
+    updateRaceUI(false);
+    updateTimerUI();
     renderQuestion();
   }
 
@@ -1114,8 +1256,8 @@
     const q = state.questions[state.index];
     const total = state.questions.length;
     const n = state.index + 1;
-    $("progress-fill").style.width = ((n - 1) / total) * 100 + "%";
-    $("progress-text").textContent = `${n} / ${total}`;
+    $("progress-text").textContent = `第 ${n} / ${total} 題`;
+    updateRaceUI(false);
     if (state.mode === "learn" && state.lessonId) {
       const lesson = LEARN_LESSONS.find((L) => L.id === state.lessonId);
       $("type-badge").textContent = (lesson && lesson.typeLabel) || TYPE_LABELS[q.type] || "";
@@ -1550,19 +1692,11 @@
 
     if (ok) {
       composeUI.slotEls.forEach((s) => s.classList.add("slot-correct"));
-      state.stars += 1;
-      state.correct += 1;
-      $("star-count").textContent = String(state.stars);
+      const finished = onCorrectProgress();
       fb.hidden = true;
       fb.textContent = "";
-      const chip = document.querySelector(".star-chip");
-      if (chip) {
-        chip.classList.remove("star-pop");
-        void chip.offsetWidth;
-        chip.classList.add("star-pop");
-      }
       SFX.correct();
-      celebrate();
+      celebrate(finished);
     } else {
       composeUI.slotEls.forEach((s) => s.classList.add("slot-wrong"));
       const example = q.solution.slice();
@@ -1588,14 +1722,14 @@
       SFX.wrong();
     }
 
-    const total = state.questions.length;
-    $("progress-fill").style.width = ((state.index + 1) / total) * 100 + "%";
-
     setTimeout(() => {
-      if (state.index + 1 >= total) {
+      const action = shouldAdvanceOrEnd(ok);
+      if (action === "end") {
+        stopTimer();
         showEnd();
       } else {
         state.index += 1;
+        state.locked = false;
         renderQuestion();
       }
     }, ok ? 1100 : 2000);
@@ -1616,20 +1750,12 @@
 
     if (ok) {
       btn.classList.add("correct");
-      state.stars += 1;
-      state.correct += 1;
-      $("star-count").textContent = String(state.stars);
-      // Stars only at top — no bottom toast for correct answers
+      const finished = onCorrectProgress();
+      // Car moves on track — no star counter
       fb.hidden = true;
       fb.textContent = "";
-      const chip = document.querySelector(".star-chip");
-      if (chip) {
-        chip.classList.remove("star-pop");
-        void chip.offsetWidth;
-        chip.classList.add("star-pop");
-      }
       SFX.correct();
-      celebrate();
+      celebrate(finished);
     } else {
       btn.classList.add("wrong");
       buttons.forEach((b) => {
@@ -1641,25 +1767,26 @@
       SFX.wrong();
     }
 
-    // advance progress bar to current
-    const total = state.questions.length;
-    $("progress-fill").style.width = ((state.index + 1) / total) * 100 + "%";
-
     setTimeout(() => {
-      if (state.index + 1 >= total) {
+      const action = shouldAdvanceOrEnd(ok);
+      if (action === "end") {
+        stopTimer();
         showEnd();
       } else {
         state.index += 1;
+        state.locked = false;
         renderQuestion();
       }
     }, ok ? 1100 : 1600);
   }
 
-  function celebrate() {
+  function celebrate(finished) {
     const overlay = $("celebrate");
     overlay.hidden = false;
     overlay.innerHTML = "";
-    const emojis = ["⭐", "✨", "🌟", "🎉", "💛"];
+    const emojis = finished
+      ? ["🏁", "🏎️", "🎉", "✨", "🏆"]
+      : ["🏎️", "✨", "🎉", "💛", "🚩"];
     for (let i = 0; i < 14; i++) {
       const p = document.createElement("span");
       p.className = "particle";
@@ -1676,23 +1803,47 @@
   }
 
   function showEnd() {
+    if (state.ended) return;
+    state.ended = true;
+    state.locked = true;
+    stopTimer();
     showScreen("end");
     const total = state.questions.length;
     const c = state.correct;
+    const finishAt = raceFinishAt();
+    const cells = Math.min(c, finishAt);
     const ratio = total ? c / total : 0;
+    const finished = state.racedFinished || state.endReason === "finish" || c >= finishAt;
     let title, msg;
-    if (ratio === 1) {
-      title = "完美！全對！";
-      msg = "你係加數積木小達人！";
-    } else if (ratio >= 0.75) {
-      title = "好叻呀！";
-      msg = "差唔多滿分，繼續加油！";
-    } else if (ratio >= 0.5) {
-      title = "做得唔錯！";
-      msg = "再練習多幾次會更好！";
+
+    if (state.mode === "practice") {
+      if (finished) {
+        title = "衝線喇！";
+        msg = "答對 " + finishAt + " 題，賽車飛過終點！";
+      } else if (state.endReason === "time") {
+        title = "時間到！";
+        msg = "今次行咗 " + cells + " / " + finishAt + " 格，再試過衝線啦！";
+      } else if (ratio >= 0.6) {
+        title = "好叻呀！";
+        msg = "行咗 " + cells + " / " + finishAt + " 格，差一點就衝線！";
+      } else if (ratio >= 0.35) {
+        title = "做得唔錯！";
+        msg = "賽車行咗 " + cells + " 格，再練習多幾次會更好！";
+      } else {
+        title = "繼續努力！";
+        msg = "慢慢嚟，答啱就向前開！今次 " + cells + " / " + finishAt + " 格。";
+      }
     } else {
-      title = "繼續努力！";
-      msg = "慢慢嚟，積木會幫你數！";
+      if (finished || ratio >= 0.75) {
+        title = "衝線喇！";
+        msg = "呢課練習完成，賽車到終點！";
+      } else if (ratio >= 0.5) {
+        title = "好叻呀！";
+        msg = "行咗 " + cells + " / " + finishAt + " 格！";
+      } else {
+        title = "繼續努力！";
+        msg = "慢慢嚟，積木會幫你數！行咗 " + cells + " 格。";
+      }
     }
 
     const againBtn = $("btn-again");
@@ -1700,20 +1851,20 @@
 
     if (state.mode === "learn" && state.lessonId) {
       const lesson = LEARN_LESSONS.find((L) => L.id === state.lessonId);
-      const prog = markLessonComplete(state.lessonId, state.stars);
+      const prog = markLessonComplete(state.lessonId, state.correct);
       const unlockedNext = state.lessonId < 6 && prog.unlocked >= state.lessonId + 1;
-      if (ratio >= 0.5) {
-        title = "完成！";
+      if (ratio >= 0.5 || finished) {
+        title = finished ? "衝線喇！" : "完成！";
         msg = unlockedNext
           ? `「${lesson ? lesson.title : ""}」學完喇，下一課已解鎖！`
           : state.lessonId === 6
             ? "六課全部完成，你太叻啦！"
-            : `「${lesson ? lesson.title : ""}」完成！`;
+            : `「${lesson ? lesson.title : ""}」完成！行咗 ${cells} / ${finishAt} 格。`;
       } else {
         title = "完成練習！";
         msg = unlockedNext
           ? "已經解鎖下一課，想再練可以返地圖揀。"
-          : "返地圖可以再練一次呢一課。";
+          : "返地圖可以再練一次呢一課。行咗 " + cells + " / " + finishAt + " 格。";
       }
       againBtn.textContent = "再練一次";
       homeBtn.textContent = "完成";
@@ -1727,15 +1878,17 @@
     $("end-correct").textContent = String(c);
     $("end-total").textContent = String(total);
 
-    // 5-star display based on score
-    const starEl = $("end-stars");
-    starEl.innerHTML = "";
-    const filled = Math.round(ratio * 5);
-    for (let i = 0; i < 5; i++) {
-      const s = document.createElement("span");
-      s.textContent = "★";
-      if (i >= filled) s.className = "dim";
-      starEl.appendChild(s);
+    const raceEl = $("end-race");
+    const raceLabel = $("end-race-label");
+    const raceCar = $("end-race-car");
+    if (raceEl && raceLabel && raceCar) {
+      raceEl.classList.toggle("won", finished);
+      raceLabel.textContent = finished
+        ? "衝線喇！ " + cells + " / " + finishAt + " 格"
+        : "行咗 " + cells + " / " + finishAt + " 格";
+      const pct = finishAt <= 0 ? 8 : 8 + (cells / finishAt) * 78;
+      raceCar.style.left = Math.min(pct, finished ? 82 : pct) + "%";
+      raceCar.textContent = finished ? "🏎️" : "🚗";
     }
 
     const eb = $("end-blocks");
@@ -1763,9 +1916,7 @@
         '<span class="lesson-info"><strong>' + lesson.emoji + " " + lesson.title + "</strong>" +
         "<small>" + lesson.blurb + "</small>" +
         (done
-          ? '<div class="lesson-stars-mini">' +
-            "★".repeat(Math.max(1, Math.round((best / LESSONS_PER_PRACTICE) * 5))) +
-            "</div>"
+          ? '<div class="lesson-race-mini">🏎️ 最好 ' + best + " / " + LESSONS_PER_PRACTICE + " 格</div>"
           : "") +
         "</span>" +
         '<span class="lesson-status" aria-hidden="true">' +
@@ -2001,6 +2152,8 @@
   $("btn-quit").addEventListener("click", () => {
     unlockAudio();
     SFX.tap();
+    stopTimer();
+    state.endReason = null;
     if (state.mode === "learn") showLearnMap();
     else showScreen("home");
   });
