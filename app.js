@@ -14,6 +14,9 @@
     triple: "連加三個數",
     missing: "缺數",
     compose: "組合數式",
+    numberSense: "認識數字",
+    doubles: "雙同數",
+    cross10: "跨十加法",
   };
 
   // make10 near-zero on mid/hard; easy only occasional. Prefer simple20 (crossing 10, doubles).
@@ -40,7 +43,198 @@
     stars: 0,
     correct: 0,
     locked: false,
+    mode: "practice", // "practice" | "learn"
+    lessonId: null,
+    teachStep: 0,
   };
+
+  // —— Learn Zone curriculum ——
+  const LEARN_KEY = "addition-blocks-learn";
+  const LESSONS_PER_PRACTICE = 9;
+
+  const LEARN_LESSONS = [
+    {
+      id: 1,
+      emoji: "🔢",
+      title: "認識數字同數粒",
+      blurb: "數一數，對應數字",
+      typeLabel: "認識數字",
+      teach: [
+        {
+          headline: "數字同數粒係好朋友",
+          body: "見到 3，就諗到三粒積木。一粒對一個，數得啱就叻！",
+          viz: "numberSense1",
+        },
+        {
+          headline: "用手指數一數",
+          body: "由左邊數到右邊，數到最後嗰粒，口裏講出嚟嘅數字就係答案。",
+          viz: "numberSense2",
+        },
+        {
+          headline: "準備練習喇！",
+          body: "下面有啲數粒同數字，幫我哋揀正確嘅數目啦～",
+          viz: "numberSense3",
+        },
+      ],
+    },
+    {
+      id: 2,
+      emoji: "➕",
+      title: "10 以內加法",
+      blurb: "兩數加埋唔超過 10",
+      typeLabel: "10 以內加法",
+      teach: [
+        {
+          headline: "兩堆加埋",
+          body: "左邊幾多，右邊幾多，一齊數晒就係總數。",
+          viz: "add10_1",
+        },
+        {
+          headline: "例如 4 ＋ 3",
+          body: "先數 4 粒，再數多 3 粒，一共 7 粒。答案寫 7。",
+          viz: "add10_2",
+        },
+        {
+          headline: "開始練習",
+          body: "全部答案都會喺 10 以內，放膽數！",
+          viz: "add10_3",
+        },
+      ],
+    },
+    {
+      id: 3,
+      emoji: "👯",
+      title: "雙同數",
+      blurb: "一樣大嘅兩個數相加",
+      typeLabel: "雙同數",
+      teach: [
+        {
+          headline: "雙同數係咩？",
+          body: "兩個一樣嘅數字加埋，例如 6＋6、7＋7，好易記！",
+          viz: "doubles1",
+        },
+        {
+          headline: "對稱好得意",
+          body: "左右兩邊一樣高，加埋就係雙倍。5＋5＝10，好特別！",
+          viz: "doubles2",
+        },
+        {
+          headline: "記熟雙同數",
+          body: "練多幾條，之後見到雙同數就即刻識答。",
+          viz: "doubles3",
+        },
+      ],
+    },
+    {
+      id: 4,
+      emoji: "🌉",
+      title: "跨十加法",
+      blurb: "加埋超過 10，學過十",
+      typeLabel: "跨十加法",
+      teach: [
+        {
+          headline: "加埋超過 10",
+          body: "好像 8＋5，結果大過 10。可以「過十」嚟想。",
+          viz: "cross1",
+        },
+        {
+          headline: "過十小秘訣",
+          body: "8 再加 2 就到 10，5 入面用咗 2，剩 3。所以 10＋3＝13。",
+          viz: "cross2",
+        },
+        {
+          headline: "慢慢嚟就得",
+          body: "唔使死記湊十，數清楚或者過十都得。開始練習啦！",
+          viz: "cross3",
+        },
+      ],
+    },
+    {
+      id: 5,
+      emoji: "❓",
+      title: "缺數同連加",
+      blurb: "搵□同三個數加埋",
+      typeLabel: "缺數／連加",
+      teach: [
+        {
+          headline: "缺數係咩？",
+          body: "□＋5＝12，問嘅係空格要填幾多。想：12 減 5，或者由 5 數到 12。",
+          viz: "miss1",
+        },
+        {
+          headline: "三個數連加",
+          body: "2＋3＋4，可以先加前面兩個，再加第三個。",
+          viz: "miss2",
+        },
+        {
+          headline: "兩種都會練",
+          body: "有啲題搵缺數，有啲題三數連加，加油！",
+          viz: "miss3",
+        },
+      ],
+    },
+    {
+      id: 6,
+      emoji: "🎯",
+      title: "拖數字湊總數",
+      blurb: "三個空位拖出目標",
+      typeLabel: "組合數式",
+      teach: [
+        {
+          headline: "湊成目標數字",
+          body: "下面有數字積木，拖三個去空位，令佢哋加埋等於目標。",
+          viz: "compose1",
+        },
+        {
+          headline: "空位長咁樣",
+          body: "□ ＋ □ ＋ □ ＝ 目標。可以拖，又可以先撳數字再撳空位。",
+          viz: "compose2",
+        },
+        {
+          headline: "唔止一個答案",
+          body: "只要三個數加埋啱目標就得。試下唔同組合啦！",
+          viz: "compose3",
+        },
+      ],
+    },
+  ];
+
+  function loadLearnProgress() {
+    try {
+      const raw = localStorage.getItem(LEARN_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        return {
+          unlocked: Math.max(1, Math.min(6, Number(data.unlocked) || 1)),
+          completed: Array.isArray(data.completed)
+            ? data.completed.map(Number).filter((n) => n >= 1 && n <= 6)
+            : [],
+          bestStars: data.bestStars && typeof data.bestStars === "object" ? data.bestStars : {},
+        };
+      }
+    } catch (_) { /* ignore */ }
+    return { unlocked: 1, completed: [], bestStars: {} };
+  }
+
+  function saveLearnProgress(prog) {
+    try {
+      localStorage.setItem(LEARN_KEY, JSON.stringify(prog));
+    } catch (_) { /* ignore */ }
+  }
+
+  function markLessonComplete(lessonId, stars) {
+    const prog = loadLearnProgress();
+    if (!prog.completed.includes(lessonId)) prog.completed.push(lessonId);
+    const key = String(lessonId);
+    const prev = Number(prog.bestStars[key]) || 0;
+    if (stars > prev) prog.bestStars[key] = stars;
+    if (lessonId >= prog.unlocked && lessonId < 6) {
+      prog.unlocked = lessonId + 1;
+    }
+    if (lessonId === 6) prog.unlocked = 6;
+    saveLearnProgress(prog);
+    return prog;
+  }
 
 
   // —— Sound (Web Audio API, kid-friendly) ——
@@ -144,6 +338,8 @@
   const $ = (id) => document.getElementById(id);
   const screens = {
     home: $("screen-home"),
+    learnMap: $("screen-learn-map"),
+    teach: $("screen-teach"),
     play: $("screen-play"),
     end: $("screen-end"),
   };
@@ -330,6 +526,9 @@
     if (q.type === "make10") return "數粒粒，湊成 10";
     if (q.type === "missing") return "數粒粒，搵缺數";
     if (q.type === "triple") return "數粒粒，三數加埋";
+    if (q.type === "numberSense") return "數粒粒，有幾多？";
+    if (q.type === "doubles") return "數粒粒，雙同數加埋";
+    if (q.type === "cross10") return "數粒粒，加埋有幾多？";
     return "數粒粒，加埋有幾多？";
   }
 
@@ -649,6 +848,186 @@
     compose: genCompose,
   };
 
+  // —— Learn-zone question builders ——
+  function genNumberSense() {
+    const n = randInt(1, 10);
+    const kind = pickObjectKind();
+    const roll = Math.random();
+    if (roll < 0.55) {
+      // Count objects
+      return applyDisplayModeForce({
+        type: "numberSense",
+        prompt: "有幾多粒？",
+        viz: [{ n }],
+        answer: n,
+        choices: uniqueChoices(n, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter((x) => x !== n), 4),
+        displayMode: "objects",
+        objectKind: kind,
+        operandModes: ["objects"],
+      });
+    }
+    // Identify numeral from tower / objects mixed
+    return applyDisplayModeForce({
+      type: "numberSense",
+      prompt: "呢個數字係幾多？",
+      viz: [{ n }],
+      answer: n,
+      choices: uniqueChoices(n, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter((x) => x !== n), 4),
+      displayMode: "numeral",
+      objectKind: null,
+      operandModes: ["numeral"],
+    });
+  }
+
+  function applyDisplayModeForce(q) {
+    // Already stamped — skip random applyDisplayMode
+    return q;
+  }
+
+  function genDoubles() {
+    const d = randInt(2, 9);
+    const ans = d + d;
+    return {
+      type: "doubles",
+      prompt: `${d} ＋ ${d} ＝ ？`,
+      viz: [{ n: d }, { op: "＋" }, { n: d }],
+      answer: ans,
+      choices: uniqueChoices(ans, [ans - 2, ans - 1, ans + 1, ans + 2, d, 10, 2 * d - 2].filter((x) => x > 0), 4),
+    };
+  }
+
+  function genCross10() {
+    // Crossing ten: sum 11–18, both addends 2–9, prefer not pure make-ten
+    let a, b;
+    for (let i = 0; i < 40; i++) {
+      a = randInt(3, 9);
+      b = randInt(3, 9);
+      const s = a + b;
+      if (s >= 11 && s <= 18) break;
+    }
+    if (a + b < 11) {
+      a = randInt(5, 9);
+      b = randInt(11 - a, 9);
+    }
+    // Avoid exact complements of 10 as the main pattern
+    if (a + b === 10) b = Math.min(9, b + 2);
+    const ans = a + b;
+    return {
+      type: "cross10",
+      prompt: `${a} ＋ ${b} ＝ ？`,
+      viz: [{ n: a }, { op: "＋" }, { n: b }],
+      answer: ans,
+      choices: uniqueChoices(ans, [ans - 2, ans - 1, ans + 1, ans + 2, 10, a + b - 10 + 10, a, b].filter((x) => x > 0 && x <= 20), 4),
+    };
+  }
+
+  function genLearnMissing() {
+    const sum = randInt(6, 14);
+    const known = randInt(2, Math.min(9, sum - 1));
+    const missing = sum - known;
+    const mode = Math.random() < 0.5 ? "left" : "right";
+    let prompt, viz;
+    if (mode === "left") {
+      prompt = `□ ＋ ${known} ＝ ${sum}`;
+      viz = known <= 10 && sum <= 10
+        ? [{ blank: true }, { op: "＋" }, { n: known }, { op: "＝" }, { n: sum }]
+        : [];
+    } else {
+      prompt = `${known} ＋ □ ＝ ${sum}`;
+      viz = known <= 10 && sum <= 10
+        ? [{ n: known }, { op: "＋" }, { blank: true }, { op: "＝" }, { n: sum }]
+        : [];
+    }
+    return {
+      type: "missing",
+      prompt,
+      viz,
+      answer: missing,
+      choices: uniqueChoices(missing, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, missing - 1, missing + 1].filter((x) => x > 0 && x <= 16), 4),
+    };
+  }
+
+  function genLearnTriple() {
+    let a = randInt(1, 6);
+    let b = randInt(1, 6);
+    let c = randInt(1, 6);
+    while (a + b + c > 18) {
+      a = randInt(1, 5);
+      b = randInt(1, 5);
+      c = randInt(1, 5);
+    }
+    const ans = a + b + c;
+    return {
+      type: "triple",
+      prompt: `${a} ＋ ${b} ＋ ${c} ＝ ？`,
+      viz: a <= 6 && b <= 6 && c <= 6
+        ? [{ n: a }, { op: "＋" }, { n: b }, { op: "＋" }, { n: c }]
+        : [],
+      answer: ans,
+      choices: uniqueChoices(ans, [ans - 2, ans - 1, ans + 1, ans + 2, a + b, b + c].filter((x) => x > 0), 4),
+    };
+  }
+
+  function genLearnCompose() {
+    // Gentler targets for lesson 6
+    const prev = state.diff;
+    state.diff = "mid";
+    const q = genCompose();
+    state.diff = prev;
+    // Prefer targets 10–16
+    if (q.target < 10 || q.target > 16) {
+      const target = randInt(10, 16);
+      const solution = splitSum(target, 3, Math.min(9, target - 2)) || [2, 3, target - 5];
+      const poolSize = randInt(5, 6);
+      const poolValues = solution.slice();
+      while (poolValues.length < poolSize) {
+        const d = randInt(1, 9);
+        if (poolValues.filter((x) => x === d).length >= 2) continue;
+        poolValues.push(d);
+      }
+      return {
+        type: "compose",
+        prompt: `拖三個數字湊成 ${target}`,
+        viz: target <= 10 ? [{ n: target }] : [],
+        target,
+        pool: shuffle(poolValues).map((value, i) => ({
+          id: "c" + i + "-" + value + "-" + Math.random().toString(36).slice(2, 6),
+          value,
+        })),
+        solution: solution.slice(),
+        mode: "drag",
+      };
+    }
+    return q;
+  }
+
+  function buildLessonQuestions(lessonId) {
+    const qs = [];
+    const n = LESSONS_PER_PRACTICE;
+    if (lessonId === 1) {
+      for (let i = 0; i < n; i++) qs.push(genNumberSense());
+    } else if (lessonId === 2) {
+      for (let i = 0; i < n; i++) {
+        const q = genSimple10();
+        // Bias more objects for lesson 2
+        qs.push(applyDisplayMode(q, "easy"));
+      }
+    } else if (lessonId === 3) {
+      for (let i = 0; i < n; i++) qs.push(applyDisplayMode(genDoubles(), "easy"));
+    } else if (lessonId === 4) {
+      for (let i = 0; i < n; i++) qs.push(applyDisplayMode(genCross10(), "mid"));
+    } else if (lessonId === 5) {
+      for (let i = 0; i < n; i++) {
+        const q = i % 2 === 0 ? genLearnMissing() : genLearnTriple();
+        qs.push(applyDisplayMode(q, "mid"));
+      }
+    } else if (lessonId === 6) {
+      for (let i = 0; i < n; i++) qs.push(genLearnCompose());
+    }
+    return shuffle(qs);
+  }
+
+
   function buildRound(diffKey) {
     const weights = DIFF[diffKey].weights;
     const qs = [];
@@ -692,8 +1071,26 @@
   function startGame(diff) {
     unlockAudio();
     SFX.blip();
+    state.mode = "practice";
+    state.lessonId = null;
     state.diff = diff;
     state.questions = buildRound(diff);
+    state.index = 0;
+    state.stars = 0;
+    state.correct = 0;
+    state.locked = false;
+    $("star-count").textContent = "0";
+    showScreen("play");
+    renderQuestion();
+  }
+
+  function startLessonPractice(lessonId) {
+    unlockAudio();
+    SFX.blip();
+    state.mode = "learn";
+    state.lessonId = lessonId;
+    state.diff = "learn";
+    state.questions = buildLessonQuestions(lessonId);
     state.index = 0;
     state.stars = 0;
     state.correct = 0;
@@ -719,7 +1116,12 @@
     const n = state.index + 1;
     $("progress-fill").style.width = ((n - 1) / total) * 100 + "%";
     $("progress-text").textContent = `${n} / ${total}`;
-    $("type-badge").textContent = TYPE_LABELS[q.type] || "";
+    if (state.mode === "learn" && state.lessonId) {
+      const lesson = LEARN_LESSONS.find((L) => L.id === state.lessonId);
+      $("type-badge").textContent = (lesson && lesson.typeLabel) || TYPE_LABELS[q.type] || "";
+    } else {
+      $("type-badge").textContent = TYPE_LABELS[q.type] || "";
+    }
 
     const qt = $("question-text");
     const useObjects = q.displayMode === "objects" || q.displayMode === "mixed";
@@ -1277,7 +1679,7 @@
     showScreen("end");
     const total = state.questions.length;
     const c = state.correct;
-    const ratio = c / total;
+    const ratio = total ? c / total : 0;
     let title, msg;
     if (ratio === 1) {
       title = "完美！全對！";
@@ -1292,6 +1694,34 @@
       title = "繼續努力！";
       msg = "慢慢嚟，積木會幫你數！";
     }
+
+    const againBtn = $("btn-again");
+    const homeBtn = $("btn-home");
+
+    if (state.mode === "learn" && state.lessonId) {
+      const lesson = LEARN_LESSONS.find((L) => L.id === state.lessonId);
+      const prog = markLessonComplete(state.lessonId, state.stars);
+      const unlockedNext = state.lessonId < 6 && prog.unlocked >= state.lessonId + 1;
+      if (ratio >= 0.5) {
+        title = "完成！";
+        msg = unlockedNext
+          ? `「${lesson ? lesson.title : ""}」學完喇，下一課已解鎖！`
+          : state.lessonId === 6
+            ? "六課全部完成，你太叻啦！"
+            : `「${lesson ? lesson.title : ""}」完成！`;
+      } else {
+        title = "完成練習！";
+        msg = unlockedNext
+          ? "已經解鎖下一課，想再練可以返地圖揀。"
+          : "返地圖可以再練一次呢一課。";
+      }
+      againBtn.textContent = "再練一次";
+      homeBtn.textContent = "完成";
+    } else {
+      againBtn.textContent = "再玩一次";
+      homeBtn.textContent = "換難度";
+    }
+
     $("end-title").textContent = title;
     $("end-msg").textContent = msg;
     $("end-correct").textContent = String(c);
@@ -1313,6 +1743,230 @@
     [Math.min(c, 10) || 1, 5, 3].forEach((n) => eb.appendChild(renderBlockTower(n, "")));
   }
 
+
+  // —— Learn map & teach ——
+  function renderLessonMap() {
+    const prog = loadLearnProgress();
+    const map = $("lesson-map");
+    map.innerHTML = "";
+    LEARN_LESSONS.forEach((lesson) => {
+      const unlocked = lesson.id <= prog.unlocked;
+      const done = prog.completed.includes(lesson.id);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "lesson-card " + (unlocked ? (done ? "done" : "open") : "locked");
+      btn.disabled = !unlocked;
+      btn.setAttribute("role", "listitem");
+      const best = Number(prog.bestStars[String(lesson.id)]) || 0;
+      btn.innerHTML =
+        '<span class="lesson-num">' + lesson.id + "</span>" +
+        '<span class="lesson-info"><strong>' + lesson.emoji + " " + lesson.title + "</strong>" +
+        "<small>" + lesson.blurb + "</small>" +
+        (done
+          ? '<div class="lesson-stars-mini">' +
+            "★".repeat(Math.max(1, Math.round((best / LESSONS_PER_PRACTICE) * 5))) +
+            "</div>"
+          : "") +
+        "</span>" +
+        '<span class="lesson-status" aria-hidden="true">' +
+        (unlocked ? (done ? "✅" : "▶️") : "🔒") +
+        "</span>";
+      if (unlocked) {
+        btn.addEventListener("click", () => {
+          unlockAudio();
+          SFX.blip();
+          openTeach(lesson.id);
+        });
+      }
+      map.appendChild(btn);
+    });
+  }
+
+  function showLearnMap() {
+    renderLessonMap();
+    showScreen("learnMap");
+  }
+
+  function openTeach(lessonId) {
+    state.mode = "learn";
+    state.lessonId = lessonId;
+    state.teachStep = 0;
+    renderTeachStep();
+    showScreen("teach");
+  }
+
+  function teachAppendOp(el, text) {
+    const op = document.createElement("span");
+    op.className = "op";
+    op.textContent = text;
+    el.appendChild(op);
+  }
+
+  function renderTeachViz(kind) {
+    const el = $("teach-viz");
+    el.innerHTML = "";
+    el.style.setProperty("--obj-chip", "34px");
+
+    function addObjs(n, kindObj) {
+      el.appendChild(renderObjectGroup(n, kindObj || "cubes"));
+    }
+
+    if (kind === "numberSense1") {
+      el.appendChild(renderBlockTower(3, "lg"));
+      teachAppendOp(el, "＝");
+      addObjs(3, "dots");
+    } else if (kind === "numberSense2") {
+      addObjs(5, "fruit");
+    } else if (kind === "numberSense3") {
+      el.appendChild(renderBlockTower(4, "lg"));
+      el.appendChild(renderBlockTower(7, ""));
+    } else if (kind === "add10_1") {
+      addObjs(2, "cubes");
+      teachAppendOp(el, "＋");
+      addObjs(3, "cubes");
+      teachAppendOp(el, "＝");
+      const big = document.createElement("span");
+      big.className = "teach-big-num";
+      big.textContent = "5";
+      el.appendChild(big);
+    } else if (kind === "add10_2") {
+      el.appendChild(renderBlockTower(4, "lg"));
+      teachAppendOp(el, "＋");
+      el.appendChild(renderBlockTower(3, "lg"));
+      teachAppendOp(el, "＝");
+      el.appendChild(renderBlockTower(7, ""));
+    } else if (kind === "add10_3") {
+      const big = document.createElement("span");
+      big.className = "teach-big-num";
+      big.textContent = "1…10";
+      el.appendChild(big);
+    } else if (kind === "doubles1") {
+      el.appendChild(renderBlockTower(6, ""));
+      teachAppendOp(el, "＋");
+      el.appendChild(renderBlockTower(6, ""));
+    } else if (kind === "doubles2") {
+      addObjs(5, "stars");
+      teachAppendOp(el, "＋");
+      addObjs(5, "stars");
+      teachAppendOp(el, "＝");
+      const big = document.createElement("span");
+      big.className = "teach-big-num";
+      big.textContent = "10";
+      el.appendChild(big);
+    } else if (kind === "doubles3") {
+      const big = document.createElement("span");
+      big.className = "teach-big-num";
+      big.textContent = "7＋7";
+      el.appendChild(big);
+    } else if (kind === "cross1") {
+      el.appendChild(renderBlockTower(8, "sm"));
+      teachAppendOp(el, "＋");
+      el.appendChild(renderBlockTower(5, "sm"));
+      teachAppendOp(el, "＝");
+      const big = document.createElement("span");
+      big.className = "teach-big-num";
+      big.textContent = "？";
+      el.appendChild(big);
+    } else if (kind === "cross2") {
+      const wrap = document.createElement("div");
+      wrap.className = "teach-bridge";
+      const row1 = document.createElement("div");
+      row1.className = "teach-bridge-row";
+      row1.innerHTML =
+        '<span class="teach-pill">8 ＋ 2 → 10</span>' +
+        '<span class="teach-arrow">再</span>' +
+        '<span class="teach-pill">＋ 3</span>';
+      const row2 = document.createElement("div");
+      row2.className = "teach-bridge-row";
+      row2.innerHTML = '<span class="teach-pill">10 ＋ 3 ＝ <strong>13</strong></span>';
+      wrap.appendChild(row1);
+      wrap.appendChild(row2);
+      el.appendChild(wrap);
+    } else if (kind === "cross3") {
+      el.appendChild(renderBlockTower(7, "sm"));
+      teachAppendOp(el, "＋");
+      el.appendChild(renderBlockTower(6, "sm"));
+    } else if (kind === "miss1") {
+      const big = document.createElement("span");
+      big.className = "teach-big-num";
+      big.style.fontSize = "2.2rem";
+      big.textContent = "□ ＋ 5 ＝ 12";
+      el.appendChild(big);
+    } else if (kind === "miss2") {
+      el.appendChild(renderBlockTower(2, "lg"));
+      teachAppendOp(el, "＋");
+      el.appendChild(renderBlockTower(3, "lg"));
+      teachAppendOp(el, "＋");
+      el.appendChild(renderBlockTower(4, "lg"));
+    } else if (kind === "miss3") {
+      const big = document.createElement("span");
+      big.className = "teach-big-num";
+      big.style.fontSize = "1.6rem";
+      big.textContent = "缺數 · 連加";
+      el.appendChild(big);
+    } else if (kind === "compose1") {
+      const big = document.createElement("span");
+      big.className = "teach-big-num";
+      big.textContent = "12";
+      el.appendChild(big);
+    } else if (kind === "compose2") {
+      const big = document.createElement("span");
+      big.className = "teach-big-num";
+      big.style.fontSize = "1.5rem";
+      big.textContent = "□ ＋ □ ＋ □ ＝ N";
+      el.appendChild(big);
+    } else if (kind === "compose3") {
+      const wrap = document.createElement("div");
+      wrap.className = "teach-bridge";
+      wrap.innerHTML =
+        '<span class="teach-pill">3＋4＋5</span>' +
+        '<span class="teach-arrow">或</span>' +
+        '<span class="teach-pill">2＋5＋5</span>';
+      el.appendChild(wrap);
+    }
+  }
+
+  function renderTeachStep() {
+    const lesson = LEARN_LESSONS.find((L) => L.id === state.lessonId);
+    if (!lesson) return;
+    const step = lesson.teach[state.teachStep];
+    const total = lesson.teach.length;
+    $("teach-lesson-title").textContent = lesson.emoji + " " + lesson.title;
+    $("teach-step-label").textContent = "第 " + (state.teachStep + 1) + " / " + total + " 步";
+    $("teach-headline").textContent = step.headline;
+    $("teach-body").textContent = step.body;
+    renderTeachViz(step.viz);
+
+    const dots = $("teach-dots");
+    dots.innerHTML = "";
+    for (let i = 0; i < total; i++) {
+      const d = document.createElement("span");
+      d.className = "teach-dot" + (i === state.teachStep ? " on" : "");
+      dots.appendChild(d);
+    }
+
+    const nextBtn = $("btn-teach-next");
+    if (state.teachStep >= total - 1) {
+      nextBtn.textContent = "開始練習";
+    } else {
+      nextBtn.textContent = "下一步";
+    }
+  }
+
+  function advanceTeach() {
+    unlockAudio();
+    SFX.tap();
+    const lesson = LEARN_LESSONS.find((L) => L.id === state.lessonId);
+    if (!lesson) return;
+    if (state.teachStep >= lesson.teach.length - 1) {
+      startLessonPractice(state.lessonId);
+    } else {
+      state.teachStep += 1;
+      renderTeachStep();
+    }
+  }
+
+
   // —— Events ——
   // Unlock AudioContext on first user gesture (iPhone Safari)
   document.addEventListener(
@@ -1326,18 +1980,47 @@
   document.querySelectorAll(".diff-btn").forEach((btn) => {
     btn.addEventListener("click", () => startGame(btn.dataset.diff));
   });
-  $("btn-quit").addEventListener("click", () => {
+
+  $("btn-learn-zone").addEventListener("click", () => {
+    unlockAudio();
+    SFX.blip();
+    showLearnMap();
+  });
+  $("btn-map-back").addEventListener("click", () => {
     unlockAudio();
     SFX.tap();
     showScreen("home");
   });
+  $("btn-teach-back").addEventListener("click", () => {
+    unlockAudio();
+    SFX.tap();
+    showLearnMap();
+  });
+  $("btn-teach-next").addEventListener("click", () => advanceTeach());
+
+  $("btn-quit").addEventListener("click", () => {
+    unlockAudio();
+    SFX.tap();
+    if (state.mode === "learn") showLearnMap();
+    else showScreen("home");
+  });
   $("btn-again").addEventListener("click", () => {
-    if (state.diff) startGame(state.diff);
+    unlockAudio();
+    SFX.tap();
+    if (state.mode === "learn" && state.lessonId) {
+      openTeach(state.lessonId);
+    } else if (state.diff && state.diff !== "learn") {
+      startGame(state.diff);
+    }
   });
   $("btn-home").addEventListener("click", () => {
     unlockAudio();
     SFX.tap();
-    showScreen("home");
+    if (state.mode === "learn") {
+      showLearnMap();
+    } else {
+      showScreen("home");
+    }
   });
 
   document.querySelectorAll(".mute-btn").forEach((btn) => {
