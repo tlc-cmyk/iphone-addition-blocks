@@ -151,6 +151,7 @@
           </div>
         </div>
       </div>
+      <div class="review-banner" id="review-banner" hidden>錯題複習</div>
       <div class="type-badge" id="type-badge">簡單加法</div>
       <div class="question-card">
         <div id="block-viz" class="block-viz" aria-hidden="true"></div>
@@ -163,21 +164,34 @@
     <!-- END -->
     <section id="screen-end" class="screen">
       <div class="end-hero">
-        <div id="end-blocks" class="end-blocks" aria-hidden="true"></div>
+        <div class="end-celeb" id="end-celeb" aria-hidden="true">
+          <div class="end-finish-scene" id="end-finish-scene">
+            <div class="end-race-track end-race-track-big">
+              <div class="end-race-lane"></div>
+              <div class="end-race-car" id="end-race-car">🏎️</div>
+              <div class="end-race-flag">🏁</div>
+            </div>
+            <p class="end-race-label" id="end-race-label">行咗 0 / 20 格</p>
+          </div>
+          <div class="end-podium" id="end-podium" hidden>
+            <div class="podium-stack" aria-hidden="true">
+              <div class="podium-step s2"><span>2</span></div>
+              <div class="podium-step s1"><span>1</span><div class="podium-champ">🏎️</div></div>
+              <div class="podium-step s3"><span>3</span></div>
+            </div>
+            <div class="podium-trophy">🏆</div>
+            <p class="podium-label" id="podium-label">冠軍！</p>
+          </div>
+        </div>
+        <div id="end-blocks" class="end-blocks" aria-hidden="true" hidden></div>
         <h2 id="end-title">做得好！</h2>
         <p id="end-msg" class="end-msg"></p>
-        <div class="end-race" id="end-race" aria-hidden="true">
-          <div class="end-race-track">
-            <div class="end-race-car" id="end-race-car">🏎️</div>
-            <div class="end-race-flag">🏁</div>
-          </div>
-          <p class="end-race-label" id="end-race-label">行咗 0 / 20 格</p>
-        </div>
         <p class="end-score"><span id="end-correct">0</span> / <span id="end-total">30</span> 題答對</p>
+        <p class="end-review-hint" id="end-review-hint" hidden></p>
       </div>
-      <div class="end-actions">
-        <button type="button" id="btn-again" class="primary-btn">再玩一次</button>
-        <button type="button" id="btn-home" class="secondary-btn">換難度</button>
+      <div class="end-actions" id="end-actions">
+        <button type="button" id="btn-again" class="primary-btn">再做一次</button>
+        <button type="button" id="btn-home" class="secondary-btn">返主頁</button>
       </div>
     </section>
 

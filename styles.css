@@ -473,6 +473,21 @@ body {
   color: #fecaca;
 }
 
+/* —— Review banner —— */
+.review-banner {
+  align-self: center;
+  margin: 0 16px 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+  animation: fadeIn 0.25s ease;
+}
+
 /* —— End —— */
 .end-hero {
   flex: 1;
@@ -483,6 +498,143 @@ body {
   text-align: center;
   padding: 12px 0;
 }
+.end-celeb {
+  width: 100%;
+  margin-bottom: 10px;
+  min-height: 110px;
+}
+.end-finish-scene {
+  width: 100%;
+}
+.end-race-track {
+  position: relative;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, #374151, #4b5563 70%, #1f2937);
+  border: 2px solid rgba(255,255,255,0.3);
+  margin: 0 auto 8px;
+  max-width: 280px;
+  overflow: hidden;
+}
+.end-race-track-big {
+  height: 56px;
+  max-width: 300px;
+  border-radius: 16px;
+}
+.end-race-lane {
+  position: absolute;
+  left: 8%;
+  right: 12%;
+  top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255,255,255,0.55) 0 14px,
+    transparent 14px 26px
+  );
+  opacity: 0.7;
+}
+.end-race-car {
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  transform: translateY(-50%);
+  font-size: 1.7rem;
+  transition: left 0.85s cubic-bezier(0.22, 0.9, 0.3, 1);
+  z-index: 2;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
+}
+.end-race-car.crossing {
+  left: 78%;
+}
+.end-race-car.parked {
+  left: 82%;
+}
+.end-race-flag {
+  position: absolute;
+  right: 8px;
+  top: 6px;
+  font-size: 1.25rem;
+  z-index: 1;
+  animation: flagWave 0.8s ease-in-out infinite alternate;
+}
+@keyframes flagWave {
+  from { transform: rotate(-6deg); }
+  to { transform: rotate(8deg); }
+}
+.end-race-label {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #fde68a;
+}
+.end-finish-scene.won .end-race-label { color: #86efac; }
+
+/* Podium / champion */
+.end-podium {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  animation: podiumIn 0.45s ease;
+}
+.end-podium[hidden] { display: none !important; }
+@keyframes podiumIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.podium-stack {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.podium-step {
+  width: 52px;
+  border-radius: 8px 8px 4px 4px;
+  background: linear-gradient(180deg, #94a3b8, #64748b);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 6px;
+  position: relative;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.25);
+}
+.podium-step.s1 {
+  height: 64px;
+  width: 64px;
+  background: linear-gradient(180deg, #fde047, #f59e0b);
+  color: #78350f;
+}
+.podium-step.s2 { height: 48px; }
+.podium-step.s3 { height: 36px; }
+.podium-champ {
+  position: absolute;
+  top: -28px;
+  font-size: 1.8rem;
+  animation: champBounce 0.7s ease infinite alternate;
+}
+@keyframes champBounce {
+  from { transform: translateY(0); }
+  to { transform: translateY(-6px); }
+}
+.podium-trophy {
+  font-size: 1.8rem;
+  margin-top: 2px;
+}
+.podium-label {
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #fde68a;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  margin: 0;
+}
+
 .end-blocks {
   display: flex;
   justify-content: center;
@@ -498,52 +650,29 @@ body {
 }
 .end-msg {
   opacity: 0.85;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   font-size: 1rem;
 }
-.end-race {
-  width: 100%;
-  margin-bottom: 14px;
-}
-.end-race-track {
-  position: relative;
-  height: 48px;
-  border-radius: 14px;
-  background: linear-gradient(90deg, #374151, #4b5563 70%, #1f2937);
-  border: 2px solid rgba(255,255,255,0.3);
-  margin: 0 auto 8px;
-  max-width: 280px;
-  overflow: hidden;
-}
-.end-race-car {
-  position: absolute;
-  top: 50%;
-  left: 8%;
-  transform: translateY(-50%);
-  font-size: 1.6rem;
-  transition: left 0.6s ease;
-}
-.end-race-flag {
-  position: absolute;
-  right: 8px;
-  top: 6px;
-  font-size: 1.2rem;
-}
-.end-race-label {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #fde68a;
-}
-.end-race.won .end-race-label { color: #86efac; }
 .end-score {
   font-size: 1.15rem;
   font-weight: 700;
+}
+.end-review-hint {
+  margin-top: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fde68a;
+  animation: fadeIn 0.3s ease;
 }
 .end-actions {
   display: flex;
   flex-direction: column;
   gap: 10px;
   width: 100%;
+}
+.end-actions.pending {
+  opacity: 0.35;
+  pointer-events: none;
 }
 .primary-btn, .secondary-btn {
   width: 100%;

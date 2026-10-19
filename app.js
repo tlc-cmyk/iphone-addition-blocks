@@ -55,6 +55,12 @@
     endReason: null, // "finish" | "questions" | "time" | null
     racedFinished: false,
     ended: false,
+    phase: "race", // "race" | "celebrate" | "review" | "end"
+    wrongQuestions: [], // clones of questions answered wrong in this round
+    reviewQueue: [],
+    raceCorrect: 0, // correct during race (frozen for end score)
+    raceTotal: 0,
+    endFlowTimer: null,
   };
 
   // —— Learn Zone curriculum ——
@@ -296,26 +302,33 @@
 
   const SFX = {
     tap() {
-      // Soft short click
-      tone(880, 0, 0.05, "triangle", 0.06);
+      // Soft dashboard click
+      tone(420, 0, 0.04, "triangle", 0.05);
     },
     blip() {
-      // Soft level-select / round-start blip
-      tone(523.25, 0, 0.08, "sine", 0.08);
-      tone(659.25, 0.06, 0.1, "sine", 0.07);
+      // Soft engine ignition tick (UI / start)
+      tone(90, 0, 0.06, "sawtooth", 0.05, 130);
+      tone(160, 0.05, 0.08, "triangle", 0.04);
     },
     correct() {
-      // Happy ascending chime (star sparkle)
-      const notes = [523.25, 659.25, 783.99, 1046.5];
-      notes.forEach((f, i) => {
-        tone(f, i * 0.07, 0.22, "sine", 0.11);
-        tone(f * 2, i * 0.07 + 0.02, 0.12, "triangle", 0.04);
-      });
+      // Short friendly engine rev as the car moves forward
+      tone(75, 0, 0.12, "sawtooth", 0.07, 130);
+      tone(95, 0.06, 0.18, "sawtooth", 0.09, 210);
+      tone(55, 0.04, 0.2, "square", 0.035, 85);
     },
     wrong() {
-      // Soft low non-scary tone
-      tone(220, 0, 0.28, "sine", 0.08, 165);
-      tone(165, 0.05, 0.22, "triangle", 0.04);
+      // Soft brake / thud — not scary, not loud
+      tone(140, 0, 0.1, "sawtooth", 0.06, 55);
+      tone(70, 0.05, 0.22, "triangle", 0.055, 40);
+      tone(50, 0.08, 0.18, "sine", 0.04);
+    },
+    finish() {
+      // Finish-line engine roar (kid-friendly, short)
+      tone(70, 0, 0.18, "sawtooth", 0.09, 150);
+      tone(95, 0.12, 0.22, "sawtooth", 0.11, 230);
+      tone(120, 0.3, 0.28, "sawtooth", 0.09, 170);
+      tone(60, 0.08, 0.45, "square", 0.045, 90);
+      tone(180, 0.4, 0.2, "triangle", 0.05, 120);
     },
   };
 
@@ -1210,7 +1223,7 @@
     const wrap = $("race-timer");
     const text = $("timer-text");
     if (!wrap || !text) return;
-    if (state.mode !== "practice" || !state.timerSeconds) {
+    if (state.mode !== "practice" || !state.timerSeconds || isReviewing()) {
       wrap.hidden = true;
       wrap.classList.remove("urgent");
       return;
@@ -1236,10 +1249,10 @@
         stopTimer();
         state.timerLeft = 0;
         updateTimerUI();
-        if (!state.ended) {
+        if (!state.ended && state.phase === "race") {
           state.endReason = "time";
           state.locked = true;
-          showEnd();
+          beginEndFlow();
         }
       }
     }, 1000);
@@ -1309,6 +1322,50 @@
     screens[name].classList.add("active");
   }
 
+  function clearEndFlowTimer() {
+    if (state.endFlowTimer) {
+      clearTimeout(state.endFlowTimer);
+      state.endFlowTimer = null;
+    }
+  }
+
+  function cloneQuestion(q) {
+    try {
+      return JSON.parse(JSON.stringify(q));
+    } catch (_) {
+      return Object.assign({}, q);
+    }
+  }
+
+  function recordWrong(q) {
+    if (state.phase === "review") return;
+    if (!q) return;
+    const key = questionKey(q);
+    if (state.wrongQuestions.some((w) => questionKey(w) === key)) return;
+    state.wrongQuestions.push(cloneQuestion(q));
+  }
+
+  function isReviewing() {
+    return state.phase === "review";
+  }
+
+  function resetRoundFlags() {
+    state.index = 0;
+    state.stars = 0;
+    state.correct = 0;
+    state.locked = false;
+    state.endReason = null;
+    state.racedFinished = false;
+    state.ended = false;
+    state.phase = "race";
+    state.wrongQuestions = [];
+    state.reviewQueue = [];
+    state.raceCorrect = 0;
+    state.raceTotal = 0;
+    state.lessonMarked = false;
+    clearEndFlowTimer();
+  }
+
   function startGame(diff) {
     unlockAudio();
     SFX.blip();
@@ -1317,16 +1374,10 @@
     state.lessonId = null;
     state.diff = diff;
     state.questions = buildRound(diff);
-    state.index = 0;
-    state.stars = 0;
-    state.correct = 0;
-    state.locked = false;
+    resetRoundFlags();
     state.finishAt = FINISH_CORRECT;
     state.timerSeconds = TIMER_SECONDS[diff] || 300;
     state.timerLeft = state.timerSeconds;
-    state.endReason = null;
-    state.racedFinished = false;
-    state.ended = false;
     showScreen("play");
     updateRaceUI(false);
     startTimer();
@@ -1341,16 +1392,10 @@
     state.lessonId = lessonId;
     state.diff = "learn";
     state.questions = buildLessonQuestions(lessonId);
-    state.index = 0;
-    state.stars = 0;
-    state.correct = 0;
-    state.locked = false;
+    resetRoundFlags();
     state.finishAt = state.questions.length || LESSONS_PER_PRACTICE;
     state.timerSeconds = 0;
     state.timerLeft = 0;
-    state.endReason = null;
-    state.racedFinished = false;
-    state.ended = false;
     showScreen("play");
     updateRaceUI(false);
     updateTimerUI();
@@ -1371,11 +1416,25 @@
     const q = state.questions[state.index];
     const total = state.questions.length;
     const n = state.index + 1;
-    $("progress-text").textContent = `第 ${n} / ${total} 題`;
+    const reviewing = isReviewing();
+    const banner = $("review-banner");
+    if (banner) {
+      banner.hidden = !reviewing;
+      if (reviewing) banner.textContent = "錯題複習 · " + n + " / " + total;
+    }
+    if (reviewing) {
+      $("progress-text").textContent = `複習 ${n} / ${total}`;
+    } else {
+      $("progress-text").textContent = `第 ${n} / ${total} 題`;
+    }
     updateRaceUI(false);
-    if (state.mode === "learn" && state.lessonId) {
+    const raceHud = $("race-hud");
+    if (raceHud) raceHud.style.opacity = reviewing ? "0.45" : "";
+    if (state.mode === "learn" && state.lessonId && !reviewing) {
       const lesson = LEARN_LESSONS.find((L) => L.id === state.lessonId);
       $("type-badge").textContent = (lesson && lesson.typeLabel) || TYPE_LABELS[q.type] || "";
+    } else if (reviewing) {
+      $("type-badge").textContent = "複習 · " + (TYPE_LABELS[q.type] || "錯題");
     } else {
       $("type-badge").textContent = TYPE_LABELS[q.type] || "";
     }
@@ -1807,13 +1866,23 @@
 
     if (ok) {
       composeUI.slotEls.forEach((s) => s.classList.add("slot-correct"));
-      const finished = onCorrectProgress();
-      fb.hidden = true;
-      fb.textContent = "";
+      let finished = false;
+      if (!isReviewing()) {
+        finished = onCorrectProgress();
+      } else {
+        fb.className = "feedback ok";
+        fb.textContent = "複習啱喇！";
+        fb.hidden = false;
+      }
+      if (!isReviewing()) {
+        fb.hidden = true;
+        fb.textContent = "";
+      }
       SFX.correct();
-      celebrate(finished);
+      if (!isReviewing()) celebrate(finished);
     } else {
       composeUI.slotEls.forEach((s) => s.classList.add("slot-wrong"));
+      recordWrong(q);
       const example = q.solution.slice();
       fb.className = "feedback bad";
       fb.innerHTML =
@@ -1838,15 +1907,7 @@
     }
 
     setTimeout(() => {
-      const action = shouldAdvanceOrEnd(ok);
-      if (action === "end") {
-        stopTimer();
-        showEnd();
-      } else {
-        state.index += 1;
-        state.locked = false;
-        renderQuestion();
-      }
+      afterAnswer(ok);
     }, ok ? 1100 : 2000);
   }
 
@@ -1865,14 +1926,21 @@
 
     if (ok) {
       btn.classList.add("correct");
-      const finished = onCorrectProgress();
-      // Car moves on track — no star counter
-      fb.hidden = true;
-      fb.textContent = "";
-      SFX.correct();
-      celebrate(finished);
+      let finished = false;
+      if (!isReviewing()) {
+        finished = onCorrectProgress();
+        fb.hidden = true;
+        fb.textContent = "";
+        SFX.correct();
+        celebrate(finished);
+      } else {
+        fb.className = "feedback ok";
+        fb.textContent = "複習啱喇！";
+        SFX.correct();
+      }
     } else {
       btn.classList.add("wrong");
+      recordWrong(q);
       buttons.forEach((b) => {
         const val = b.dataset.value != null ? b.dataset.value : b.textContent;
         if (val === String(q.answer)) b.classList.add("reveal");
@@ -1883,16 +1951,31 @@
     }
 
     setTimeout(() => {
-      const action = shouldAdvanceOrEnd(ok);
-      if (action === "end") {
-        stopTimer();
-        showEnd();
+      afterAnswer(ok);
+    }, ok ? 1100 : 1600);
+  }
+
+  function afterAnswer(ok) {
+    if (isReviewing()) {
+      // Review: advance through wrong queue; always continue after feedback
+      if (state.index + 1 >= state.questions.length) {
+        finishReview();
       } else {
         state.index += 1;
         state.locked = false;
         renderQuestion();
       }
-    }, ok ? 1100 : 1600);
+      return;
+    }
+    const action = shouldAdvanceOrEnd(ok);
+    if (action === "end") {
+      stopTimer();
+      beginEndFlow();
+    } else {
+      state.index += 1;
+      state.locked = false;
+      renderQuestion();
+    }
   }
 
   function celebrate(finished) {
@@ -1900,8 +1983,8 @@
     overlay.hidden = false;
     overlay.innerHTML = "";
     const emojis = finished
-      ? ["🏁", "🏎️", "🎉", "✨", "🏆"]
-      : ["🏎️", "✨", "🎉", "💛", "🚩"];
+      ? ["🏁", "🏎️", "🎉", "🏆", "🚩"]
+      : ["🏎️", "🏁", "🎉", "💛", "🚩"];
     for (let i = 0; i < 14; i++) {
       const p = document.createElement("span");
       p.className = "particle";
@@ -1917,24 +2000,73 @@
     }, 1400);
   }
 
-  function showEnd() {
-    if (state.ended) return;
-    state.ended = true;
-    state.locked = true;
+  function beginEndFlow() {
+    if (state.ended || state.phase === "celebrate" || state.phase === "end") return;
+    if (state.phase === "review") return;
     stopTimer();
-    showScreen("end");
-    const total = state.questions.length;
-    const c = state.correct;
+    state.locked = true;
+    state.phase = "celebrate";
+    state.raceCorrect = state.correct;
+    state.raceTotal = state.questions.length;
+    const finished =
+      state.racedFinished ||
+      state.endReason === "finish" ||
+      state.correct >= raceFinishAt();
+    if (state.mode === "learn" && state.lessonId && !state.lessonMarked) {
+      markLessonComplete(state.lessonId, state.raceCorrect);
+      state.lessonMarked = true;
+    }
+    if (finished) {
+      unlockAudio();
+      SFX.finish();
+    }
+    showEndScreen({ interim: true, finished: finished });
+    clearEndFlowTimer();
+    const delay = finished ? 2600 : 1600;
+    state.endFlowTimer = setTimeout(() => {
+      state.endFlowTimer = null;
+      if (state.wrongQuestions.length > 0) {
+        startWrongReview();
+      } else {
+        finalizeEndScreen();
+      }
+    }, delay);
+  }
+
+  function startWrongReview() {
+    clearEndFlowTimer();
+    state.phase = "review";
+    state.ended = false;
+    state.reviewQueue = state.wrongQuestions.map(cloneQuestion);
+    state.questions = state.reviewQueue.slice();
+    state.index = 0;
+    state.locked = false;
+    state.endReason = state.endReason || "questions";
+    showScreen("play");
+    updateTimerUI();
+    renderQuestion();
+  }
+
+  function finishReview() {
+    state.phase = "end";
+    finalizeEndScreen();
+  }
+
+  function buildEndCopy(finished) {
+    const total = state.raceTotal || state.questions.length;
+    const c =
+      state.raceCorrect != null && state.phase !== "race"
+        ? state.raceCorrect
+        : state.correct;
     const finishAt = raceFinishAt();
     const cells = Math.min(c, finishAt);
     const ratio = total ? c / total : 0;
-    const finished = state.racedFinished || state.endReason === "finish" || c >= finishAt;
     let title, msg;
 
     if (state.mode === "practice") {
       if (finished) {
         title = "衝線喇！";
-        msg = "答對 " + finishAt + " 題，賽車飛過終點！";
+        msg = "答對 " + finishAt + " 題，賽車飛過終點！你係冠軍！";
       } else if (state.endReason === "time") {
         title = "時間到！";
         msg = "今次行咗 " + cells + " / " + finishAt + " 格，再試過衝線啦！";
@@ -1948,25 +2080,9 @@
         title = "繼續努力！";
         msg = "慢慢嚟，答啱就向前開！今次 " + cells + " / " + finishAt + " 格。";
       }
-    } else {
-      if (finished || ratio >= 0.75) {
-        title = "衝線喇！";
-        msg = "呢課練習完成，賽車到終點！";
-      } else if (ratio >= 0.5) {
-        title = "好叻呀！";
-        msg = "行咗 " + cells + " / " + finishAt + " 格！";
-      } else {
-        title = "繼續努力！";
-        msg = "慢慢嚟，積木會幫你數！行咗 " + cells + " 格。";
-      }
-    }
-
-    const againBtn = $("btn-again");
-    const homeBtn = $("btn-home");
-
-    if (state.mode === "learn" && state.lessonId) {
+    } else if (state.mode === "learn" && state.lessonId) {
       const lesson = LEARN_LESSONS.find((L) => L.id === state.lessonId);
-      const prog = markLessonComplete(state.lessonId, state.correct);
+      const prog = loadLearnProgress();
       const unlockedNext = state.lessonId < 6 && prog.unlocked >= state.lessonId + 1;
       if (ratio >= 0.5 || finished) {
         title = finished ? "衝線喇！" : "完成！";
@@ -1981,34 +2097,133 @@
           ? "已經解鎖下一課，想再練可以返地圖揀。"
           : "返地圖可以再練一次呢一課。行咗 " + cells + " / " + finishAt + " 格。";
       }
-      againBtn.textContent = "再練一次";
-      homeBtn.textContent = "完成";
     } else {
-      againBtn.textContent = "再玩一次";
-      homeBtn.textContent = "換難度";
+      if (finished || ratio >= 0.75) {
+        title = "衝線喇！";
+        msg = "呢課練習完成，賽車到終點！";
+      } else if (ratio >= 0.5) {
+        title = "好叻呀！";
+        msg = "行咗 " + cells + " / " + finishAt + " 格！";
+      } else {
+        title = "繼續努力！";
+        msg = "慢慢嚟，積木會幫你數！行咗 " + cells + " 格。";
+      }
     }
 
-    $("end-title").textContent = title;
-    $("end-msg").textContent = msg;
-    $("end-correct").textContent = String(c);
-    $("end-total").textContent = String(total);
+    return { title, msg, total, c, finishAt, cells, ratio, finished };
+  }
 
-    const raceEl = $("end-race");
+  function playEndCarSequence(finished, cells, finishAt) {
+    const scene = $("end-finish-scene");
+    const podium = $("end-podium");
     const raceLabel = $("end-race-label");
     const raceCar = $("end-race-car");
-    if (raceEl && raceLabel && raceCar) {
-      raceEl.classList.toggle("won", finished);
+    const podiumLabel = $("podium-label");
+    if (scene) scene.hidden = false;
+    if (podium) podium.hidden = true;
+    if (scene) scene.classList.toggle("won", !!finished);
+    if (raceLabel) {
       raceLabel.textContent = finished
         ? "衝線喇！ " + cells + " / " + finishAt + " 格"
         : "行咗 " + cells + " / " + finishAt + " 格";
-      const pct = finishAt <= 0 ? 8 : 8 + (cells / finishAt) * 78;
-      raceCar.style.left = Math.min(pct, finished ? 82 : pct) + "%";
+    }
+    if (raceCar) {
+      raceCar.classList.remove("crossing", "parked");
+      const startPct = finishAt <= 0 ? 8 : 8 + (Math.min(cells, finishAt) / finishAt) * 70;
+      // Start a bit before finish for the dash animation
+      raceCar.style.transition = "none";
+      raceCar.style.left = Math.max(8, Math.min(startPct, finished ? 55 : startPct)) + "%";
       raceCar.textContent = finished ? "🏎️" : "🚗";
+      void raceCar.offsetWidth;
+      raceCar.style.transition = "";
+      requestAnimationFrame(() => {
+        if (finished) {
+          raceCar.classList.add("crossing");
+          setTimeout(() => {
+            raceCar.classList.add("parked");
+            if (podium) {
+              podium.hidden = false;
+              if (scene) scene.hidden = true;
+            }
+            if (podiumLabel) podiumLabel.textContent = "冠軍！";
+          }, 900);
+        } else {
+          raceCar.style.left = Math.min(8 + (cells / Math.max(finishAt, 1)) * 78, 78) + "%";
+        }
+      });
+    }
+  }
+
+  function showEndScreen(opts) {
+    const interim = !!(opts && opts.interim);
+    const finished =
+      opts && opts.finished != null
+        ? opts.finished
+        : state.racedFinished || state.endReason === "finish" || state.correct >= raceFinishAt();
+
+    // Only mark lesson complete once on first end presentation
+    const copy = buildEndCopy(finished);
+    showScreen("end");
+
+    const againBtn = $("btn-again");
+    const homeBtn = $("btn-home");
+    const actions = $("end-actions");
+    const hint = $("end-review-hint");
+
+    if (state.mode === "learn" && state.lessonId) {
+      againBtn.textContent = "再做一次";
+      homeBtn.textContent = "返學習區";
+    } else {
+      againBtn.textContent = "再做一次";
+      homeBtn.textContent = "返主頁";
     }
 
-    const eb = $("end-blocks");
-    eb.innerHTML = "";
-    [Math.min(c, 10) || 1, 5, 3].forEach((n) => eb.appendChild(renderBlockTower(n, "")));
+    $("end-title").textContent = copy.title;
+    $("end-msg").textContent = copy.msg;
+    $("end-correct").textContent = String(copy.c);
+    $("end-total").textContent = String(copy.total);
+
+    playEndCarSequence(copy.finished, copy.cells, copy.finishAt);
+
+    if (interim && state.wrongQuestions.length > 0) {
+      if (actions) actions.classList.add("pending");
+      if (hint) {
+        hint.hidden = false;
+        hint.textContent =
+          "等陣複習 " + state.wrongQuestions.length + " 題錯題～";
+      }
+    } else if (interim) {
+      if (actions) actions.classList.add("pending");
+      if (hint) hint.hidden = true;
+    } else {
+      if (actions) actions.classList.remove("pending");
+      if (hint) {
+        if (state.wrongQuestions.length > 0) {
+          hint.hidden = false;
+          hint.textContent =
+            "已複習 " + state.wrongQuestions.length + " 題錯題";
+        } else {
+          hint.hidden = true;
+        }
+      }
+    }
+  }
+
+  function finalizeEndScreen() {
+    state.ended = true;
+    state.locked = true;
+    state.phase = "end";
+    stopTimer();
+    const finished =
+      state.racedFinished ||
+      state.endReason === "finish" ||
+      state.raceCorrect >= raceFinishAt();
+    showEndScreen({ interim: false, finished: finished });
+  }
+
+  // Back-compat alias
+  function showEnd() {
+    beginEndFlow();
   }
 
 
@@ -2268,15 +2483,20 @@
     unlockAudio();
     SFX.tap();
     stopTimer();
+    clearEndFlowTimer();
     state.endReason = null;
+    state.phase = "race";
+    const banner = $("review-banner");
+    if (banner) banner.hidden = true;
     if (state.mode === "learn") showLearnMap();
     else showScreen("home");
   });
   $("btn-again").addEventListener("click", () => {
     unlockAudio();
     SFX.tap();
+    clearEndFlowTimer();
     if (state.mode === "learn" && state.lessonId) {
-      openTeach(state.lessonId);
+      startLessonPractice(state.lessonId);
     } else if (state.diff && state.diff !== "learn") {
       startGame(state.diff);
     }
@@ -2284,6 +2504,9 @@
   $("btn-home").addEventListener("click", () => {
     unlockAudio();
     SFX.tap();
+    clearEndFlowTimer();
+    const banner = $("review-banner");
+    if (banner) banner.hidden = true;
     if (state.mode === "learn") {
       showLearnMap();
     } else {
