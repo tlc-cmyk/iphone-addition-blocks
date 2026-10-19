@@ -556,13 +556,35 @@ body {
 .compose-slots {
   display: flex;
   justify-content: center;
-  align-items: stretch;
-  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   padding: 4px 0;
 }
+.compose-op {
+  font-size: clamp(1.35rem, 5.5vw, 1.75rem);
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1;
+  user-select: none;
+  flex-shrink: 0;
+}
+.compose-eq {
+  margin-left: 2px;
+}
+.compose-eq-target {
+  min-width: 2ch;
+  font-size: clamp(1.6rem, 7vw, 2.1rem);
+  font-weight: 900;
+  color: var(--star);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  line-height: 1;
+  user-select: none;
+  flex-shrink: 0;
+}
 .compose-slot {
-  width: 72px;
-  height: 72px;
+  width: 64px;
+  height: 64px;
   border-radius: 18px;
   border: 3px dashed rgba(255, 255, 255, 0.45);
   background: rgba(255, 255, 255, 0.1);
@@ -599,6 +621,21 @@ body {
 @keyframes slotPulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.03); }
+}
+
+.feedback-op {
+  font-weight: 900;
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin: 0 2px;
+  align-self: center;
+}
+.feedback-eq-target {
+  font-weight: 900;
+  font-size: 1.15rem;
+  color: var(--star);
+  margin-left: 2px;
+  align-self: center;
 }
 
 .compose-hint {

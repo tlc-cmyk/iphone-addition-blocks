@@ -705,9 +705,16 @@
     const slotsRow = document.createElement("div");
     slotsRow.className = "compose-slots";
     slotsRow.setAttribute("role", "group");
-    slotsRow.setAttribute("aria-label", "三個數字位置");
+    slotsRow.setAttribute("aria-label", "數式：三個數字加埋等於 " + q.target);
     const slots = [];
     for (let i = 0; i < 3; i++) {
+      if (i > 0) {
+        const op = document.createElement("span");
+        op.className = "compose-op";
+        op.setAttribute("aria-hidden", "true");
+        op.textContent = "＋";
+        slotsRow.appendChild(op);
+      }
       const slot = document.createElement("div");
       slot.className = "compose-slot";
       slot.dataset.slot = String(i);
@@ -715,6 +722,16 @@
       slotsRow.appendChild(slot);
       slots.push(slot);
     }
+    const eq = document.createElement("span");
+    eq.className = "compose-op compose-eq";
+    eq.setAttribute("aria-hidden", "true");
+    eq.textContent = "＝";
+    slotsRow.appendChild(eq);
+    const targetNum = document.createElement("span");
+    targetNum.className = "compose-eq-target";
+    targetNum.textContent = String(q.target);
+    targetNum.setAttribute("aria-label", "目標 " + q.target);
+    slotsRow.appendChild(targetNum);
     box.appendChild(slotsRow);
 
     const hint = document.createElement("p");
@@ -1076,7 +1093,11 @@
               n +
               "</span>"
           )
-          .join("") +
+          .join('<span class="feedback-op">＋</span>') +
+        '<span class="feedback-op">＝</span>' +
+        '<span class="feedback-eq-target">' +
+        q.target +
+        "</span>" +
         "</span>";
       SFX.wrong();
     }
