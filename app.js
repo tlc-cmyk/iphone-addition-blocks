@@ -7,7 +7,7 @@
 
   const QUESTIONS_PER_ROUND = 30;
   const FINISH_CORRECT = 20; // free practice: car crosses finish after this many correct
-  const TIMER_SECONDS = { easy: 180, mid: 240, hard: 300 };
+  const TIMER_SECONDS = { easy: 300, mid: 300, hard: 300 };
 
   const TYPE_LABELS = {
     simple10: "1–10 簡單加法",
@@ -1207,7 +1207,7 @@
     state.correct = 0;
     state.locked = false;
     state.finishAt = FINISH_CORRECT;
-    state.timerSeconds = TIMER_SECONDS[diff] || 180;
+    state.timerSeconds = TIMER_SECONDS[diff] || 300;
     state.timerLeft = state.timerSeconds;
     state.endReason = null;
     state.racedFinished = false;
