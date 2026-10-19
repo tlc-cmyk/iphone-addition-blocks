@@ -1,0 +1,19 @@
+{
+  "name": "加數積木星星",
+  "short_name": "加數積木",
+  "description": "數字積木加法遊戲 — 專為 iPhone 設計",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a0a4e",
+  "theme_color": "#1a0a4e",
+  "lang": "zh-HK",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
