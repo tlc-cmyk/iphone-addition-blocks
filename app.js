@@ -335,15 +335,6 @@
     };
   }
 
-  function formatGroup(nums) {
-    // Spaced numbers only — no ＋ so kids see a group, not a written sum
-    return nums.join("  ");
-  }
-
-  function groupKey(nums) {
-    return nums.slice().sort((a, b) => a - b).join(",");
-  }
-
   /** Split target into count positive integers (each 1..maxPart). */
   function splitSum(target, count, maxPart) {
     for (let attempt = 0; attempt < 80; attempt++) {
@@ -366,74 +357,68 @@
     return null;
   }
 
+  /**
+   * Compose: child drags three number chips into slots to make the target.
+   * Pool has 5–7 chips (P1-friendly 1–15) with at least one valid trio.
+   */
   function genCompose() {
-    // Which group of 3–4 numbers sums to target?
     const diff = state.diff || "mid";
     let target;
-    if (diff === "hard") target = randInt(14, 20);
+    if (diff === "hard") target = randInt(14, 22);
     else if (diff === "mid") target = randInt(12, 18);
-    else target = randInt(10, 16);
+    else target = randInt(10, 15);
 
-    const count = Math.random() < 0.55 ? 4 : 3;
-    const maxPart = Math.min(10, target - (count - 1));
-
-    let correct = splitSum(target, count, maxPart);
-    if (!correct) {
-      // fallback: mostly 1s + remainder
-      correct = Array(count - 1).fill(1);
-      correct.push(target - (count - 1));
-      correct = shuffle(correct);
-    }
-    const correctStr = formatGroup(correct);
-    const seen = new Set([groupKey(correct)]);
-
-    const wrongs = [];
-    let guard = 0;
-    while (wrongs.length < 3 && guard < 120) {
-      guard++;
-      const wCount = Math.random() < 0.55 ? 4 : 3;
-      // Nearby wrong sums so it is not trivial
-      const offsets = [-3, -2, -1, 1, 2, 3];
-      const offset = offsets[randInt(0, offsets.length - 1)];
-      let wTarget = target + offset;
-      if (wTarget < wCount) wTarget = target + Math.abs(offset);
-      if (wTarget === target) continue;
-      const wMax = Math.min(10, wTarget - (wCount - 1));
-      if (wMax < 1) continue;
-      const parts = splitSum(wTarget, wCount, wMax);
-      if (!parts) continue;
-      const key = groupKey(parts);
-      if (seen.has(key)) continue;
-      // Extra safety: sum must not equal target
-      if (parts.reduce((s, n) => s + n, 0) === target) continue;
-      seen.add(key);
-      wrongs.push(formatGroup(parts));
-    }
-    // Fill if needed with simple near-miss groups
-    let fill = 0;
-    while (wrongs.length < 3 && fill < 40) {
-      fill++;
-      const wCount = wrongs.length % 2 === 0 ? 4 : 3;
-      const bump = wrongs.length + 1 + fill;
-      const parts = Array(wCount - 1).fill(1);
-      parts.push(Math.max(1, target + bump - (wCount - 1)));
-      if (parts.reduce((s, n) => s + n, 0) === target) {
-        parts[parts.length - 1] += 1;
+    const maxPart = Math.min(15, target - 2);
+    let solution = splitSum(target, 3, maxPart);
+    if (!solution) {
+      solution = shuffle([1, 1, Math.max(1, target - 2)]);
+      if (solution[2] > 15) {
+        solution = [Math.min(9, target - 2), 1, Math.max(1, target - 10)];
       }
-      const key = groupKey(parts);
-      if (seen.has(key) || parts.reduce((s, n) => s + n, 0) === target) continue;
-      seen.add(key);
-      wrongs.push(formatGroup(shuffle(parts)));
+    }
+    // Clamp parts to 1–15
+    solution = solution.map((n) => Math.min(15, Math.max(1, n)));
+    // Fix sum if clamp broke it
+    let solSum = solution.reduce((s, n) => s + n, 0);
+    if (solSum !== target) {
+      const a = Math.min(9, Math.max(1, Math.floor(target / 3)));
+      const b = Math.min(9, Math.max(1, Math.floor((target - a) / 2)));
+      const c = target - a - b;
+      solution = shuffle([a, b, Math.min(15, Math.max(1, c))]);
+      if (solution.reduce((s, n) => s + n, 0) !== target) {
+        solution = [1, 2, Math.min(15, target - 3)];
+        if (solution[2] < 1) solution = [1, 1, Math.max(1, target - 2)];
+      }
     }
 
-    const choices = shuffle([correctStr, ...wrongs.slice(0, 3)]);
+    const poolSize = randInt(5, 7);
+    const poolValues = solution.slice();
+    let guard = 0;
+    while (poolValues.length < poolSize && guard < 80) {
+      guard++;
+      const d = randInt(1, Math.min(15, Math.max(6, target - 1)));
+      // Prefer distractors that aren't already over-represented
+      const countSame = poolValues.filter((x) => x === d).length;
+      if (countSame >= 2) continue;
+      poolValues.push(d);
+    }
+    while (poolValues.length < poolSize) {
+      poolValues.push(randInt(1, 9));
+    }
+
+    const pool = shuffle(poolValues).map((value, i) => ({
+      id: "c" + i + "-" + value + "-" + Math.random().toString(36).slice(2, 6),
+      value,
+    }));
+
     return {
       type: "compose",
-      prompt: `邊一組加起嚟係 ${target}？`,
+      prompt: `拖三個數字湊成 ${target}`,
       viz: target <= 10 ? [{ n: target }] : [],
-      answer: correctStr,
-      choices,
-      isString: true,
+      target,
+      pool,
+      solution: solution.slice(),
+      mode: "drag",
     };
   }
 
@@ -499,7 +484,17 @@
     renderQuestion();
   }
 
+  // —— Compose drag / tap state ——
+  let composeUI = null;
+
+  function clearComposeUI() {
+    composeUI = null;
+    const ghost = document.getElementById("compose-ghost");
+    if (ghost) ghost.remove();
+  }
+
   function renderQuestion() {
+    clearComposeUI();
     const q = state.questions[state.index];
     const total = state.questions.length;
     const n = state.index + 1;
@@ -507,7 +502,14 @@
     $("progress-text").textContent = `${n} / ${total}`;
     $("type-badge").textContent = TYPE_LABELS[q.type] || "";
     $("question-text").textContent = q.prompt;
-    if (q.viz && q.viz.length) {
+    if (q.type === "compose" && q.mode === "drag") {
+      const el = $("block-viz");
+      el.innerHTML = "";
+      const big = document.createElement("div");
+      big.className = "compose-big-target";
+      big.textContent = String(q.target);
+      el.appendChild(big);
+    } else if (q.viz && q.viz.length) {
       renderViz(q.viz);
     } else {
       $("block-viz").innerHTML = "";
@@ -519,34 +521,416 @@
 
     const box = $("choices");
     box.innerHTML = "";
-    q.choices.forEach((c) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "choice-btn";
-      btn.dataset.value = String(c);
-      if (q.type === "compose" && q.isString) {
-        btn.classList.add("choice-btn-chips");
-        const row = document.createElement("span");
-        row.className = "choice-chips";
-        String(c)
-          .trim()
-          .split(/\s+/)
-          .forEach((tok) => {
-            const n = Number(tok);
-            const chip = document.createElement("span");
-            chip.className = "choice-chip " + colorClass(Number.isFinite(n) ? n : 0);
-            chip.textContent = tok;
-            row.appendChild(chip);
-          });
-        btn.appendChild(row);
-        btn.setAttribute("aria-label", String(c).trim().replace(/\s+/g, " "));
-      } else {
+    box.className = "choices";
+
+    if (q.type === "compose" && q.mode === "drag") {
+      box.className = "choices compose-board";
+      renderComposeBoard(box, q);
+    } else {
+      q.choices.forEach((c) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "choice-btn";
+        btn.dataset.value = String(c);
         btn.textContent = String(c);
-      }
-      btn.addEventListener("click", () => onAnswer(c, btn));
-      box.appendChild(btn);
-    });
+        btn.addEventListener("click", () => onAnswer(c, btn));
+        box.appendChild(btn);
+      });
+    }
     state.locked = false;
+  }
+
+  function renderComposeBoard(box, q) {
+    const slotsRow = document.createElement("div");
+    slotsRow.className = "compose-slots";
+    slotsRow.setAttribute("role", "group");
+    slotsRow.setAttribute("aria-label", "三個數字位置");
+    const slots = [];
+    for (let i = 0; i < 3; i++) {
+      const slot = document.createElement("div");
+      slot.className = "compose-slot";
+      slot.dataset.slot = String(i);
+      slot.setAttribute("aria-label", "空位 " + (i + 1));
+      slotsRow.appendChild(slot);
+      slots.push(slot);
+    }
+    box.appendChild(slotsRow);
+
+    const hint = document.createElement("p");
+    hint.className = "compose-hint";
+    hint.textContent = "拖去空位，或者先撳數字再撳空位";
+    box.appendChild(hint);
+
+    const poolEl = document.createElement("div");
+    poolEl.className = "compose-pool";
+    poolEl.setAttribute("role", "group");
+    poolEl.setAttribute("aria-label", "數字積木");
+    box.appendChild(poolEl);
+
+    const checkBtn = document.createElement("button");
+    checkBtn.type = "button";
+    checkBtn.className = "compose-check-btn";
+    checkBtn.textContent = "檢查";
+    checkBtn.disabled = true;
+    box.appendChild(checkBtn);
+
+    composeUI = {
+      q,
+      slots: [null, null, null], // chip ids
+      selectedId: null,
+      chipEls: new Map(),
+      slotEls: slots,
+      poolEl,
+      checkBtn,
+      dragging: null,
+    };
+
+    q.pool.forEach((chip) => {
+      const el = makeComposeChip(chip);
+      composeUI.chipEls.set(chip.id, el);
+      poolEl.appendChild(el);
+    });
+
+    checkBtn.addEventListener("click", () => {
+      if (state.locked) return;
+      tryComposeCheck();
+    });
+  }
+
+  function makeComposeChip(chip) {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "compose-chip " + colorClass(chip.value);
+    el.dataset.chipId = chip.id;
+    el.dataset.value = String(chip.value);
+    el.textContent = String(chip.value);
+    el.setAttribute("aria-label", "數字 " + chip.value);
+
+    // Tap-to-select
+    el.addEventListener("click", (e) => {
+      if (state.locked || (composeUI && composeUI.dragging)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      unlockAudio();
+      SFX.tap();
+      onComposeChipTap(chip.id);
+    });
+
+    // Pointer drag (touch + mouse)
+    el.addEventListener("pointerdown", (e) => {
+      if (state.locked) return;
+      if (e.button != null && e.button !== 0) return;
+      e.stopPropagation();
+      beginComposeDrag(chip.id, el, e);
+    });
+
+    return el;
+  }
+
+  function onComposeChipTap(chipId) {
+    if (!composeUI || state.locked) return;
+    const slotIdx = composeUI.slots.indexOf(chipId);
+    if (slotIdx >= 0) {
+      // Return chip from slot to pool
+      composeUI.slots[slotIdx] = null;
+      composeUI.selectedId = null;
+      placeChipInPool(chipId);
+      refreshComposeSelection();
+      updateComposeCheckEnabled();
+      return;
+    }
+    // Select / deselect from pool
+    if (composeUI.selectedId === chipId) {
+      composeUI.selectedId = null;
+    } else {
+      composeUI.selectedId = chipId;
+    }
+    refreshComposeSelection();
+  }
+
+  function onSlotTap(slotIndex) {
+    if (!composeUI || state.locked) return;
+    unlockAudio();
+    SFX.tap();
+    const existing = composeUI.slots[slotIndex];
+    if (composeUI.selectedId) {
+      const sel = composeUI.selectedId;
+      // If selected chip is already in another slot, clear that slot
+      const prev = composeUI.slots.indexOf(sel);
+      if (prev >= 0) composeUI.slots[prev] = null;
+      // If slot occupied, return that chip to pool first
+      if (existing && existing !== sel) {
+        placeChipInPool(existing);
+      }
+      composeUI.slots[slotIndex] = sel;
+      composeUI.selectedId = null;
+      placeChipInSlot(sel, slotIndex);
+      refreshComposeSelection();
+      updateComposeCheckEnabled();
+      maybeAutoCheck();
+      return;
+    }
+    // No selection: tap occupied slot returns chip
+    if (existing) {
+      composeUI.slots[slotIndex] = null;
+      placeChipInPool(existing);
+      refreshComposeSelection();
+      updateComposeCheckEnabled();
+    }
+  }
+
+  function placeChipInPool(chipId) {
+    const el = composeUI.chipEls.get(chipId);
+    if (!el) return;
+    el.classList.remove("in-slot", "selected", "dragging");
+    composeUI.poolEl.appendChild(el);
+  }
+
+  function placeChipInSlot(chipId, slotIndex) {
+    const el = composeUI.chipEls.get(chipId);
+    const slot = composeUI.slotEls[slotIndex];
+    if (!el || !slot) return;
+    el.classList.add("in-slot");
+    el.classList.remove("selected", "dragging");
+    slot.appendChild(el);
+  }
+
+  function refreshComposeSelection() {
+    if (!composeUI) return;
+    composeUI.chipEls.forEach((el, id) => {
+      el.classList.toggle("selected", id === composeUI.selectedId);
+    });
+    composeUI.slotEls.forEach((slot, i) => {
+      slot.classList.toggle("filled", composeUI.slots[i] != null);
+      slot.classList.toggle("awaiting", !!composeUI.selectedId && composeUI.slots[i] == null);
+      // Re-bind tap on slot (empty area)
+      slot.onclick = () => onSlotTap(i);
+    });
+  }
+
+  function updateComposeCheckEnabled() {
+    if (!composeUI) return;
+    const full = composeUI.slots.every((id) => id != null);
+    composeUI.checkBtn.disabled = !full || state.locked;
+  }
+
+  function maybeAutoCheck() {
+    if (!composeUI || state.locked) return;
+    if (composeUI.slots.every((id) => id != null)) {
+      // Brief pause so kid sees the filled slots
+      setTimeout(() => {
+        if (!composeUI || state.locked) return;
+        if (composeUI.slots.every((id) => id != null)) tryComposeCheck();
+      }, 280);
+    }
+  }
+
+  function beginComposeDrag(chipId, el, e) {
+    if (!composeUI || state.locked) return;
+    const pointerId = e.pointerId;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let moved = false;
+    const rect = el.getBoundingClientRect();
+    const offsetX = startX - rect.left;
+    const offsetY = startY - rect.top;
+
+    composeUI.dragging = { chipId, pointerId, moved: false };
+
+    const onMove = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (!moved && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        moved = true;
+        composeUI.dragging.moved = true;
+        // Lift into ghost
+        el.classList.add("dragging");
+        el.setPointerCapture(pointerId);
+        let ghost = document.getElementById("compose-ghost");
+        if (!ghost) {
+          ghost = document.createElement("div");
+          ghost.id = "compose-ghost";
+          ghost.className = "compose-chip compose-ghost " + colorClass(Number(el.dataset.value));
+          ghost.textContent = el.dataset.value;
+          document.body.appendChild(ghost);
+        }
+        ghost.style.width = rect.width + "px";
+        ghost.style.height = rect.height + "px";
+        positionGhost(ghost, ev.clientX - offsetX, ev.clientY - offsetY);
+        // Dim original
+        el.classList.add("drag-source");
+      }
+      if (moved) {
+        ev.preventDefault();
+        const ghost = document.getElementById("compose-ghost");
+        if (ghost) positionGhost(ghost, ev.clientX - offsetX, ev.clientY - offsetY);
+        highlightSlotUnder(ev.clientX, ev.clientY);
+      }
+    };
+
+    const onUp = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
+      const ghost = document.getElementById("compose-ghost");
+      if (ghost) ghost.remove();
+      el.classList.remove("dragging", "drag-source");
+      composeUI.slotEls.forEach((s) => s.classList.remove("drop-hover"));
+
+      const wasMoved = moved;
+      composeUI.dragging = null;
+
+      if (!wasMoved) {
+        // Short press: let the click handler treat it as tap-to-select
+        return;
+      }
+
+      // Suppress the synthetic click that follows a drag
+      const suppressClick = (ce) => {
+        ce.preventDefault();
+        ce.stopPropagation();
+        el.removeEventListener("click", suppressClick, true);
+      };
+      el.addEventListener("click", suppressClick, true);
+
+      // Drop onto slot under pointer
+      const slotIndex = slotIndexUnder(ev.clientX, ev.clientY);
+      if (slotIndex != null) {
+        unlockAudio();
+        SFX.tap();
+        // Remove from previous slot if any
+        const prev = composeUI.slots.indexOf(chipId);
+        if (prev >= 0) composeUI.slots[prev] = null;
+        const existing = composeUI.slots[slotIndex];
+        if (existing && existing !== chipId) placeChipInPool(existing);
+        composeUI.slots[slotIndex] = chipId;
+        composeUI.selectedId = null;
+        placeChipInSlot(chipId, slotIndex);
+        refreshComposeSelection();
+        updateComposeCheckEnabled();
+        maybeAutoCheck();
+      } else {
+        // Dropped outside: if was in slot and dropped on pool area, return; else restore
+        const poolRect = composeUI.poolEl.getBoundingClientRect();
+        const inPool =
+          ev.clientX >= poolRect.left &&
+          ev.clientX <= poolRect.right &&
+          ev.clientY >= poolRect.top &&
+          ev.clientY <= poolRect.bottom;
+        const prev = composeUI.slots.indexOf(chipId);
+        if (inPool && prev >= 0) {
+          composeUI.slots[prev] = null;
+          placeChipInPool(chipId);
+          refreshComposeSelection();
+          updateComposeCheckEnabled();
+        } else if (prev < 0) {
+          placeChipInPool(chipId);
+        } else {
+          placeChipInSlot(chipId, prev);
+        }
+        composeUI.selectedId = null;
+        refreshComposeSelection();
+      }
+    };
+
+    document.addEventListener("pointermove", onMove, { passive: false });
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
+  }
+
+  function positionGhost(ghost, x, y) {
+    ghost.style.transform = "translate(" + x + "px," + y + "px)";
+  }
+
+  function slotIndexUnder(x, y) {
+    if (!composeUI) return null;
+    for (let i = 0; i < composeUI.slotEls.length; i++) {
+      const r = composeUI.slotEls[i].getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return i;
+    }
+    return null;
+  }
+
+  function highlightSlotUnder(x, y) {
+    const idx = slotIndexUnder(x, y);
+    composeUI.slotEls.forEach((s, i) => {
+      s.classList.toggle("drop-hover", i === idx);
+    });
+  }
+
+  function tryComposeCheck() {
+    if (!composeUI || state.locked) return;
+    if (!composeUI.slots.every((id) => id != null)) return;
+    unlockAudio();
+    SFX.tap();
+    state.locked = true;
+    composeUI.checkBtn.disabled = true;
+
+    const q = composeUI.q;
+    const values = composeUI.slots.map((id) => {
+      const chip = q.pool.find((c) => c.id === id);
+      return chip ? chip.value : 0;
+    });
+    const sum = values.reduce((s, n) => s + n, 0);
+    const ok = sum === q.target;
+
+    const fb = $("feedback");
+    fb.hidden = false;
+
+    // Lock chips
+    composeUI.chipEls.forEach((el) => {
+      el.disabled = true;
+    });
+
+    if (ok) {
+      composeUI.slotEls.forEach((s) => s.classList.add("slot-correct"));
+      state.stars += 1;
+      state.correct += 1;
+      $("star-count").textContent = String(state.stars);
+      fb.hidden = true;
+      fb.textContent = "";
+      const chip = document.querySelector(".star-chip");
+      if (chip) {
+        chip.classList.remove("star-pop");
+        void chip.offsetWidth;
+        chip.classList.add("star-pop");
+      }
+      SFX.correct();
+      celebrate();
+    } else {
+      composeUI.slotEls.forEach((s) => s.classList.add("slot-wrong"));
+      const example = q.solution.slice();
+      fb.className = "feedback bad";
+      fb.innerHTML =
+        "答錯喇～例如可以係 " +
+        '<span class="feedback-chips">' +
+        example
+          .map(
+            (n) =>
+              '<span class="choice-chip ' +
+              colorClass(n) +
+              '">' +
+              n +
+              "</span>"
+          )
+          .join("") +
+        "</span>";
+      SFX.wrong();
+    }
+
+    const total = state.questions.length;
+    $("progress-fill").style.width = ((state.index + 1) / total) * 100 + "%";
+
+    setTimeout(() => {
+      if (state.index + 1 >= total) {
+        showEnd();
+      } else {
+        state.index += 1;
+        renderQuestion();
+      }
+    }, ok ? 1100 : 2000);
   }
 
   function onAnswer(choice, btn) {

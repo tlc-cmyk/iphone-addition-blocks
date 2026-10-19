@@ -342,44 +342,6 @@ body {
   animation: pulseOk 0.45s ease;
 }
 
-/* Compose: number chips (no ＋ between) */
-.choice-btn-chips {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 10px;
-}
-.choice-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-}
-.choice-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 36px;
-  height: 36px;
-  padding: 0 8px;
-  border-radius: 10px;
-  color: #fff;
-  font-size: 1.15rem;
-  font-weight: 800;
-  line-height: 1;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
-}
-.choice-btn.correct .choice-chips,
-.choice-btn.reveal .choice-chips {
-  filter: saturate(1.05);
-}
-.choice-btn.wrong .choice-chip {
-  opacity: 0.75;
-  filter: grayscale(0.25);
-}
-
 @keyframes pulseOk {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.04); }
@@ -549,6 +511,230 @@ body {
 .nb-c9 { background: #a855f7; }
 .nb-c10 { background: linear-gradient(180deg, #ef4444 0 50%, #3b82f6 50% 100%); }
 .nb-c0 { background: #94a3b8; }
+
+
+/* —— Compose drag-to-build board —— */
+.choices.compose-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+  grid-template-columns: none;
+}
+
+
+.compose-big-target {
+  font-size: clamp(2.8rem, 14vw, 3.6rem);
+  font-weight: 900;
+  color: var(--bg2);
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.compose-target {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.compose-target-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+.compose-target-num {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: var(--star);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  line-height: 1;
+}
+
+.compose-slots {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+  padding: 4px 0;
+}
+.compose-slot {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  border: 3px dashed rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+  touch-action: none;
+}
+.compose-slot.filled {
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.18);
+}
+.compose-slot.awaiting {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.18);
+  animation: slotPulse 1s ease infinite;
+}
+.compose-slot.drop-hover {
+  border-color: #fbbf24;
+  border-style: solid;
+  background: rgba(251, 191, 36, 0.28);
+  transform: scale(1.04);
+}
+.compose-slot.slot-correct {
+  border-color: var(--ok);
+  background: rgba(22, 163, 74, 0.28);
+}
+.compose-slot.slot-wrong {
+  border-color: var(--bad);
+  background: rgba(220, 38, 38, 0.22);
+}
+@keyframes slotPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+.compose-hint {
+  text-align: center;
+  font-size: 0.78rem;
+  opacity: 0.7;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.compose-pool {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 8px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.18);
+  min-height: 88px;
+  align-items: center;
+}
+
+.compose-chip {
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 16px;
+  color: #fff;
+  font-size: 1.45rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+  box-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.22),
+    inset 0 2px 0 rgba(255, 255, 255, 0.35);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+  -webkit-user-select: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+.compose-chip:active {
+  cursor: grabbing;
+}
+.compose-chip.selected {
+  outline: 3px solid #fbbf24;
+  outline-offset: 2px;
+  transform: scale(1.08);
+  box-shadow:
+    0 4px 12px rgba(251, 191, 36, 0.45),
+    0 3px 0 rgba(0, 0, 0, 0.22);
+}
+.compose-chip.in-slot {
+  width: 58px;
+  height: 58px;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+.compose-chip.drag-source {
+  opacity: 0.35;
+}
+.compose-chip:disabled {
+  cursor: default;
+  opacity: 0.95;
+}
+
+.compose-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0.95;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  transform: translate(-1000px, -1000px);
+  will-change: transform;
+}
+
+.compose-check-btn {
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+  color: #1a1040;
+  font-size: 1.15rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(249, 115, 22, 0.35);
+}
+.compose-check-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+.compose-check-btn:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+.feedback-chips {
+  display: inline-flex;
+  gap: 8px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.feedback .choice-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 800;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+}
+
+/* Legacy chip styles (feedback / unused choice mode) */
+.choice-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
 
 /* celebrate overlay */
 .celebrate {
