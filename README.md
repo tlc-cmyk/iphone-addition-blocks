@@ -1,11 +1,14 @@
 # 加數積木星星
 
+- Repo：https://github.com/tlc-cmyk/iphone-addition-blocks
+- 線上玩：https://tlc-cmyk.github.io/iphone-addition-blocks/
+
 專為 **iPhone** 設計嘅兒童加法練習遊戲。用原創「數字積木」方塊角色學加法，唔係 Numberblocks / BBC 官方內容。
 
 ## 點樣喺 iPhone 打開
 
 ### 方法一：GitHub Pages（推薦）
-1. 用 Safari 打開專案 Pages 網址（見下方或 Repo 嘅 About）
+1. 用 Safari 打開：https://tlc-cmyk.github.io/iphone-addition-blocks/
 2. 點分享按鈕 → **加入主畫面**，就可以好似 App 咁全螢幕玩
 
 ### 方法二：本機開啟
