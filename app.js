@@ -336,7 +336,8 @@
   }
 
   function formatGroup(nums) {
-    return nums.join("＋");
+    // Spaced numbers only — no ＋ so kids see a group, not a written sum
+    return nums.join("  ");
   }
 
   function groupKey(nums) {
@@ -522,7 +523,26 @@
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "choice-btn";
-      btn.textContent = String(c);
+      btn.dataset.value = String(c);
+      if (q.type === "compose" && q.isString) {
+        btn.classList.add("choice-btn-chips");
+        const row = document.createElement("span");
+        row.className = "choice-chips";
+        String(c)
+          .trim()
+          .split(/\s+/)
+          .forEach((tok) => {
+            const n = Number(tok);
+            const chip = document.createElement("span");
+            chip.className = "choice-chip " + colorClass(Number.isFinite(n) ? n : 0);
+            chip.textContent = tok;
+            row.appendChild(chip);
+          });
+        btn.appendChild(row);
+        btn.setAttribute("aria-label", String(c).trim().replace(/\s+/g, " "));
+      } else {
+        btn.textContent = String(c);
+      }
       btn.addEventListener("click", () => onAnswer(c, btn));
       box.appendChild(btn);
     });
@@ -561,7 +581,8 @@
     } else {
       btn.classList.add("wrong");
       buttons.forEach((b) => {
-        if (b.textContent === String(q.answer)) b.classList.add("reveal");
+        const val = b.dataset.value != null ? b.dataset.value : b.textContent;
+        if (val === String(q.answer)) b.classList.add("reveal");
       });
       fb.className = "feedback bad";
       fb.textContent = `答錯喇～正確答案係 ${q.answer}`;
