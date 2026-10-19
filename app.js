@@ -468,7 +468,6 @@
   });
   $("btn-home").addEventListener("click", () => showScreen("home"));
 
-  );
 
   fillLogo();
 })();
