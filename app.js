@@ -23,11 +23,11 @@
     },
     mid: {
       label: "中",
-      weights: { simple10: 1, simple20: 4, make10: 2, missing: 3, compose: 2, triple: 0 },
+      weights: { simple10: 1, simple20: 3, make10: 2, missing: 3, compose: 3, triple: 0 },
     },
     hard: {
       label: "難",
-      weights: { simple10: 0, simple20: 1, make10: 1, missing: 3, compose: 3, triple: 4 },
+      weights: { simple10: 0, simple20: 1, make10: 1, missing: 2, compose: 4, triple: 4 },
     },
   };
 
@@ -237,24 +237,97 @@
     };
   }
 
-  function genCompose() {
-    // Which pair sums to target? Display as "a＋b"
-    const target = randInt(6, 16);
-    const a = randInt(1, target - 1);
-    const b = target - a;
-    // avoid a === b duplicates in wrong answers carefully
-    const correctStr = `${a}＋${b}`;
-    const wrongPairs = [];
-    const tried = new Set([`${a},${b}`, `${b},${a}`]);
-    while (wrongPairs.length < 6) {
-      const x = randInt(1, Math.max(2, target - 1));
-      const y = randInt(1, 12);
-      const key = `${x},${y}`;
-      if (tried.has(key) || x + y === target) continue;
-      tried.add(key);
-      wrongPairs.push(`${x}＋${y}`);
+  function formatGroup(nums) {
+    return nums.join("＋");
+  }
+
+  function groupKey(nums) {
+    return nums.slice().sort((a, b) => a - b).join(",");
+  }
+
+  /** Split target into count positive integers (each 1..maxPart). */
+  function splitSum(target, count, maxPart) {
+    for (let attempt = 0; attempt < 80; attempt++) {
+      const parts = [];
+      let remaining = target;
+      for (let i = 0; i < count - 1; i++) {
+        const slotsLeft = count - i - 1;
+        const minHere = 1;
+        const maxHere = Math.min(maxPart, remaining - slotsLeft);
+        if (maxHere < minHere) break;
+        const n = randInt(minHere, maxHere);
+        parts.push(n);
+        remaining -= n;
+      }
+      if (parts.length !== count - 1) continue;
+      if (remaining < 1 || remaining > maxPart) continue;
+      parts.push(remaining);
+      return shuffle(parts);
     }
-    const choices = shuffle([correctStr, ...wrongPairs.slice(0, 3)]);
+    return null;
+  }
+
+  function genCompose() {
+    // Which group of 3–4 numbers sums to target?
+    const diff = state.diff || "mid";
+    let target;
+    if (diff === "hard") target = randInt(14, 20);
+    else if (diff === "mid") target = randInt(12, 18);
+    else target = randInt(10, 16);
+
+    const count = Math.random() < 0.55 ? 4 : 3;
+    const maxPart = Math.min(10, target - (count - 1));
+
+    let correct = splitSum(target, count, maxPart);
+    if (!correct) {
+      // fallback: mostly 1s + remainder
+      correct = Array(count - 1).fill(1);
+      correct.push(target - (count - 1));
+      correct = shuffle(correct);
+    }
+    const correctStr = formatGroup(correct);
+    const seen = new Set([groupKey(correct)]);
+
+    const wrongs = [];
+    let guard = 0;
+    while (wrongs.length < 3 && guard < 120) {
+      guard++;
+      const wCount = Math.random() < 0.55 ? 4 : 3;
+      // Nearby wrong sums so it is not trivial
+      const offsets = [-3, -2, -1, 1, 2, 3];
+      const offset = offsets[randInt(0, offsets.length - 1)];
+      let wTarget = target + offset;
+      if (wTarget < wCount) wTarget = target + Math.abs(offset);
+      if (wTarget === target) continue;
+      const wMax = Math.min(10, wTarget - (wCount - 1));
+      if (wMax < 1) continue;
+      const parts = splitSum(wTarget, wCount, wMax);
+      if (!parts) continue;
+      const key = groupKey(parts);
+      if (seen.has(key)) continue;
+      // Extra safety: sum must not equal target
+      if (parts.reduce((s, n) => s + n, 0) === target) continue;
+      seen.add(key);
+      wrongs.push(formatGroup(parts));
+    }
+    // Fill if needed with simple near-miss groups
+    let fill = 0;
+    while (wrongs.length < 3 && fill < 40) {
+      fill++;
+      const wCount = wrongs.length % 2 === 0 ? 4 : 3;
+      const bump = wrongs.length + 1 + fill;
+      const parts = Array(wCount - 1).fill(1);
+      parts.push(Math.max(1, target + bump - (wCount - 1)));
+      if (parts.reduce((s, n) => s + n, 0) === target) {
+        parts[parts.length - 1] += 1;
+      }
+      const key = groupKey(parts);
+      if (seen.has(key) || parts.reduce((s, n) => s + n, 0) === target) continue;
+      seen.add(key);
+      wrongs.push(formatGroup(shuffle(parts)));
+    }
+
+    const choices = shuffle([correctStr, ...wrongs.slice(0, 3)]);
     return {
       type: "compose",
       prompt: `邊一組加起嚟係 ${target}？`,
@@ -372,8 +445,15 @@
       state.stars += 1;
       state.correct += 1;
       $("star-count").textContent = String(state.stars);
-      fb.className = "feedback ok";
-      fb.textContent = "答對喇！★ 加一顆星星";
+      // Stars only at top — no bottom toast for correct answers
+      fb.hidden = true;
+      fb.textContent = "";
+      const chip = document.querySelector(".star-chip");
+      if (chip) {
+        chip.classList.remove("star-pop");
+        void chip.offsetWidth;
+        chip.classList.add("star-pop");
+      }
       celebrate();
     } else {
       btn.classList.add("wrong");
