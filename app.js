@@ -41,6 +41,104 @@
     locked: false,
   };
 
+
+  // —— Sound (Web Audio API, kid-friendly) ——
+  const SOUND_KEY = "addition-blocks-sound";
+  let audioCtx = null;
+  let soundEnabled = true;
+  try {
+    const saved = localStorage.getItem(SOUND_KEY);
+    if (saved === "0") soundEnabled = false;
+    else if (saved === "1") soundEnabled = true;
+  } catch (_) { /* ignore */ }
+
+  function getAudioCtx() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audioCtx = new AC();
+    }
+    return audioCtx;
+  }
+
+  function unlockAudio() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+  }
+
+  function tone(freq, start, dur, type, gainPeak, freqEnd) {
+    const ctx = getAudioCtx();
+    if (!ctx || !soundEnabled) return;
+    const t0 = ctx.currentTime + start;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type || "sine";
+    osc.frequency.setValueAtTime(freq, t0);
+    if (freqEnd != null) {
+      osc.frequency.linearRampToValueAtTime(freqEnd, t0 + dur);
+    }
+    const peak = gainPeak != null ? gainPeak : 0.12;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  const SFX = {
+    tap() {
+      // Soft short click
+      tone(880, 0, 0.05, "triangle", 0.06);
+    },
+    blip() {
+      // Soft level-select / round-start blip
+      tone(523.25, 0, 0.08, "sine", 0.08);
+      tone(659.25, 0.06, 0.1, "sine", 0.07);
+    },
+    correct() {
+      // Happy ascending chime (star sparkle)
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((f, i) => {
+        tone(f, i * 0.07, 0.22, "sine", 0.11);
+        tone(f * 2, i * 0.07 + 0.02, 0.12, "triangle", 0.04);
+      });
+    },
+    wrong() {
+      // Soft low non-scary tone
+      tone(220, 0, 0.28, "sine", 0.08, 165);
+      tone(165, 0.05, 0.22, "triangle", 0.04);
+    },
+  };
+
+  function updateMuteUI() {
+    const on = soundEnabled;
+    document.querySelectorAll(".mute-btn").forEach((btn) => {
+      btn.setAttribute("aria-pressed", on ? "false" : "true");
+      btn.setAttribute("aria-label", on ? "靜音" : "開聲");
+      btn.title = on ? "靜音" : "開聲";
+      const icon = btn.querySelector(".mute-icon");
+      const label = btn.querySelector(".mute-label");
+      if (icon) icon.textContent = on ? "🔊" : "🔇";
+      if (label) label.textContent = on ? "開聲" : "靜音";
+      btn.classList.toggle("muted", !on);
+    });
+  }
+
+  function toggleSound() {
+    unlockAudio();
+    soundEnabled = !soundEnabled;
+    try {
+      localStorage.setItem(SOUND_KEY, soundEnabled ? "1" : "0");
+    } catch (_) { /* ignore */ }
+    updateMuteUI();
+    if (soundEnabled) SFX.blip();
+  }
+
   // —— DOM ——
   const $ = (id) => document.getElementById(id);
   const screens = {
@@ -387,6 +485,8 @@
   }
 
   function startGame(diff) {
+    unlockAudio();
+    SFX.blip();
     state.diff = diff;
     state.questions = buildRound(diff);
     state.index = 0;
@@ -431,6 +531,8 @@
 
   function onAnswer(choice, btn) {
     if (state.locked) return;
+    unlockAudio();
+    SFX.tap();
     state.locked = true;
     const q = state.questions[state.index];
     const ok = choice === q.answer;
@@ -454,6 +556,7 @@
         void chip.offsetWidth;
         chip.classList.add("star-pop");
       }
+      SFX.correct();
       celebrate();
     } else {
       btn.classList.add("wrong");
@@ -462,6 +565,7 @@
       });
       fb.className = "feedback bad";
       fb.textContent = `答錯喇～正確答案係 ${q.answer}`;
+      SFX.wrong();
     }
 
     // advance progress bar to current
@@ -539,15 +643,39 @@
   }
 
   // —— Events ——
+  // Unlock AudioContext on first user gesture (iPhone Safari)
+  document.addEventListener(
+    "pointerdown",
+    () => {
+      unlockAudio();
+    },
+    { once: true, passive: true }
+  );
+
   document.querySelectorAll(".diff-btn").forEach((btn) => {
     btn.addEventListener("click", () => startGame(btn.dataset.diff));
   });
-  $("btn-quit").addEventListener("click", () => showScreen("home"));
+  $("btn-quit").addEventListener("click", () => {
+    unlockAudio();
+    SFX.tap();
+    showScreen("home");
+  });
   $("btn-again").addEventListener("click", () => {
     if (state.diff) startGame(state.diff);
   });
-  $("btn-home").addEventListener("click", () => showScreen("home"));
+  $("btn-home").addEventListener("click", () => {
+    unlockAudio();
+    SFX.tap();
+    showScreen("home");
+  });
 
+  document.querySelectorAll(".mute-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleSound();
+    });
+  });
+  updateMuteUI();
 
   fillLogo();
 })();

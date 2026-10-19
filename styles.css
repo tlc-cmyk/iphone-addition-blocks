@@ -144,6 +144,44 @@ body {
   opacity: 0.55;
 }
 
+
+/* —— Mute toggle —— */
+.home-mute-row {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 0;
+}
+.mute-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.mute-btn:active { background: rgba(255,255,255,0.3); }
+.mute-btn.muted {
+  background: rgba(0,0,0,0.22);
+  opacity: 0.85;
+}
+.mute-btn .mute-icon { font-size: 1.1rem; line-height: 1; }
+.mute-btn-icon {
+  width: var(--tap);
+  height: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  border-radius: 16px;
+  justify-content: center;
+}
+.mute-btn-icon .mute-icon { font-size: 1.25rem; }
+
 /* —— Play —— */
 .play-bar {
   display: flex;
