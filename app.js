@@ -187,6 +187,138 @@
     return shuffle([...set]).slice(0, count);
   }
 
+
+  // —— Mixed representations (numeral vs counting objects) ——
+  // Easy slightly more pictures; hard mostly numbers. Overall ~20–30% objects.
+  const OBJECT_CHANCE = { easy: 0.38, mid: 0.40, hard: 0.18 };
+  const OBJECT_KINDS = ["cubes", "dots", "fruit", "stars"];
+  const FRUIT_EMOJIS = ["🍎", "🍊", "🍋", "🍇", "🍓", "🍑", "🥝", "🫐"];
+  const STAR_EMOJIS = ["⭐", "🌟", "✨"];
+  const DOT_COLORS = [
+    "#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6",
+    "#3b82f6", "#8b5cf6", "#ec4899", "#a855f7", "#06b6d4",
+  ];
+
+  function pickObjectKind() {
+    return OBJECT_KINDS[randInt(0, OBJECT_KINDS.length - 1)];
+  }
+
+  /** Eligible when all countable shown quantities are ≤ 10 (and type supports pictures). */
+  function canUseObjects(q) {
+    if (!q || q.type === "compose") return false;
+    const nums = [];
+    if (q.viz && q.viz.length) {
+      q.viz.forEach((p) => {
+        if (p.n != null) nums.push(p.n);
+      });
+    }
+    if (!nums.length) {
+      // Fall back: parse simple prompts when viz empty (e.g. large simple20)
+      return false;
+    }
+    return nums.every((n) => n >= 1 && n <= 10);
+  }
+
+  function shouldPickObjects(diffKey) {
+    const p = OBJECT_CHANCE[diffKey] != null ? OBJECT_CHANCE[diffKey] : 0.22;
+    return Math.random() < p;
+  }
+
+  /**
+   * Attach displayMode / objectKind / operandModes to a question.
+   * operandModes: parallel to viz number slots — 'numeral' | 'objects'
+   * Mixed: sometimes only one side is pictorial.
+   */
+  function applyDisplayMode(q, diffKey) {
+    q.displayMode = "numeral";
+    q.objectKind = null;
+    q.operandModes = null;
+    if (!canUseObjects(q)) return q;
+    if (!shouldPickObjects(diffKey || state.diff || "mid")) return q;
+
+    const kind = pickObjectKind();
+    const numSlots = (q.viz || []).filter((p) => p.n != null).length;
+    // ~40% mixed (one side objects) when ≥2 number parts; else all objects
+    let modes;
+    if (numSlots >= 2 && Math.random() < 0.4) {
+      modes = [];
+      let objCount = 0;
+      for (let i = 0; i < numSlots; i++) {
+        const useObj = Math.random() < 0.55;
+        modes.push(useObj ? "objects" : "numeral");
+        if (useObj) objCount++;
+      }
+      if (objCount === 0) modes[0] = "objects";
+      if (objCount === numSlots) modes[randInt(0, numSlots - 1)] = "numeral";
+    } else {
+      modes = Array(numSlots).fill("objects");
+    }
+
+    const anyObj = modes.some((m) => m === "objects");
+    if (!anyObj) return q;
+
+    q.displayMode = modes.every((m) => m === "objects") ? "objects" : "mixed";
+    q.objectKind = kind;
+    q.operandModes = modes;
+    return q;
+  }
+
+  function renderObjectGroup(n, kind, size) {
+    const wrap = document.createElement("div");
+    wrap.className = "obj-group" + (size ? " " + size : "");
+    wrap.setAttribute("aria-label", String(n));
+    wrap.dataset.count = String(n);
+    const k = kind || "cubes";
+    const count = Math.min(Math.max(n, 1), 10);
+
+    if (k === "cubes") {
+      wrap.classList.add("obj-cubes");
+      for (let i = 0; i < count; i++) {
+        const cube = document.createElement("span");
+        cube.className = "obj-cube " + colorClass(count);
+        wrap.appendChild(cube);
+      }
+    } else if (k === "dots") {
+      wrap.classList.add("obj-dots");
+      const color = DOT_COLORS[(count - 1) % DOT_COLORS.length];
+      for (let i = 0; i < count; i++) {
+        const dot = document.createElement("span");
+        dot.className = "obj-dot";
+        dot.style.background = DOT_COLORS[i % DOT_COLORS.length];
+        // Keep a dominant tint via outline color for the group
+        if (i === 0) wrap.style.setProperty("--obj-accent", color);
+        wrap.appendChild(dot);
+      }
+    } else if (k === "fruit") {
+      wrap.classList.add("obj-emoji");
+      const emoji = FRUIT_EMOJIS[(count - 1) % FRUIT_EMOJIS.length];
+      for (let i = 0; i < count; i++) {
+        const s = document.createElement("span");
+        s.className = "obj-emoji-item";
+        s.textContent = emoji;
+        wrap.appendChild(s);
+      }
+    } else {
+      // stars
+      wrap.classList.add("obj-emoji");
+      const emoji = STAR_EMOJIS[(count - 1) % STAR_EMOJIS.length];
+      for (let i = 0; i < count; i++) {
+        const s = document.createElement("span");
+        s.className = "obj-emoji-item";
+        s.textContent = emoji;
+        wrap.appendChild(s);
+      }
+    }
+    return wrap;
+  }
+
+  function buildObjectsPromptHint(q) {
+    if (q.type === "make10") return "數粒粒，湊成 10";
+    if (q.type === "missing") return "數粒粒，搵缺數";
+    if (q.type === "triple") return "數粒粒，三數加埋";
+    return "數粒粒，加埋有幾多？";
+  }
+
   // —— Number block renderer ——
   function colorClass(n) {
     if (n <= 0) return "nb-c0";
@@ -220,11 +352,13 @@
     return wrap;
   }
 
-  function renderViz(parts, size) {
+  function renderViz(parts, size, q) {
     const el = $("block-viz");
     el.innerHTML = "";
     // parts: array of {n} or {op: '+'} or {op: '='} or {blank: true}
     const useSize = size || (parts.filter((p) => p.n != null).every((p) => p.n <= 5) ? "lg" : "");
+    const modes = q && q.operandModes ? q.operandModes.slice() : null;
+    let numIdx = 0;
     parts.forEach((p) => {
       if (p.op) {
         const op = document.createElement("span");
@@ -238,7 +372,17 @@
         b.style.fontSize = "2rem";
         el.appendChild(b);
       } else if (p.n != null) {
-        el.appendChild(renderBlockTower(p.n, useSize || (p.n > 6 ? "sm" : "")));
+        const mode = modes ? modes[numIdx] : "numeral";
+        numIdx++;
+        if (mode === "objects" && q && q.objectKind) {
+          const ogSize = p.n <= 5 ? "lg" : p.n > 7 ? "sm" : "";
+          el.appendChild(renderObjectGroup(p.n, q.objectKind, ogSize || useSize));
+        } else if (q && q.displayMode === "objects") {
+          // Full objects mode without per-operand (shouldn't happen) — still objects
+          el.appendChild(renderObjectGroup(p.n, (q && q.objectKind) || "cubes", useSize || (p.n > 6 ? "sm" : "")));
+        } else {
+          el.appendChild(renderBlockTower(p.n, useSize || (p.n > 6 ? "sm" : "")));
+        }
       }
     });
   }
@@ -438,30 +582,30 @@
     for (let i = 0; i < QUESTIONS_PER_ROUND; i++) {
       const t = pickWeighted(weights);
       typeCounts[t] = (typeCounts[t] || 0) + 1;
-      qs.push(GENERATORS[t]());
+      qs.push(applyDisplayMode(GENERATORS[t](), diffKey));
     }
     // Ensure variety: if mid/hard missing compose or triple, force inject
     if (diffKey === "mid") {
-      ensureType(qs, "missing", weights);
-      ensureType(qs, "compose", weights);
-      ensureType(qs, "simple20", weights);
+      ensureType(qs, "missing", weights, diffKey);
+      ensureType(qs, "compose", weights, diffKey);
+      ensureType(qs, "simple20", weights, diffKey);
     }
     if (diffKey === "hard") {
-      ensureType(qs, "triple", weights);
-      ensureType(qs, "missing", weights);
-      ensureType(qs, "compose", weights);
+      ensureType(qs, "triple", weights, diffKey);
+      ensureType(qs, "missing", weights, diffKey);
+      ensureType(qs, "compose", weights, diffKey);
     }
     if (diffKey === "easy") {
-      ensureType(qs, "make10", weights);
-      ensureType(qs, "simple10", weights);
+      ensureType(qs, "make10", weights, diffKey);
+      ensureType(qs, "simple10", weights, diffKey);
     }
     return shuffle(qs);
   }
 
-  function ensureType(qs, type, weights) {
+  function ensureType(qs, type, weights, diffKey) {
     if (weights[type] <= 0) return;
     if (qs.some((q) => q.type === type)) return;
-    qs[randInt(0, qs.length - 1)] = GENERATORS[type]();
+    qs[randInt(0, qs.length - 1)] = applyDisplayMode(GENERATORS[type](), diffKey || state.diff || "mid");
   }
 
   // —— Screens ——
@@ -501,7 +645,23 @@
     $("progress-fill").style.width = ((n - 1) / total) * 100 + "%";
     $("progress-text").textContent = `${n} / ${total}`;
     $("type-badge").textContent = TYPE_LABELS[q.type] || "";
-    $("question-text").textContent = q.prompt;
+
+    const qt = $("question-text");
+    const useObjects = q.displayMode === "objects" || q.displayMode === "mixed";
+    if (useObjects && q.type !== "compose") {
+      // Full objects: hide arabic equation; mixed: keep numerals for clarity
+      if (q.displayMode === "objects") {
+        qt.textContent = buildObjectsPromptHint(q);
+        qt.classList.add("prompt-objects");
+      } else {
+        qt.textContent = q.prompt;
+        qt.classList.remove("prompt-objects");
+      }
+    } else {
+      qt.textContent = q.prompt;
+      qt.classList.remove("prompt-objects");
+    }
+
     if (q.type === "compose" && q.mode === "drag") {
       const el = $("block-viz");
       el.innerHTML = "";
@@ -510,7 +670,7 @@
       big.textContent = String(q.target);
       el.appendChild(big);
     } else if (q.viz && q.viz.length) {
-      renderViz(q.viz);
+      renderViz(q.viz, null, q);
     } else {
       $("block-viz").innerHTML = "";
     }
@@ -527,6 +687,7 @@
       box.className = "choices compose-board";
       renderComposeBoard(box, q);
     } else {
+      // MC answers stay as arabic numerals for clarity
       q.choices.forEach((c) => {
         const btn = document.createElement("button");
         btn.type = "button";
