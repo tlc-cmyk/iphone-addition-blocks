@@ -263,9 +263,24 @@
     return q;
   }
 
-  function renderObjectGroup(n, kind, size) {
+  /** One chip px for every object on screen — bigger when fewer items. */
+  function pickUniformChipPx(counts) {
+    const list = (counts || []).filter((n) => n > 0);
+    if (!list.length) return 32;
+    const maxN = Math.max.apply(null, list);
+    const groups = list.length;
+    const total = list.reduce((a, b) => a + b, 0);
+    // iPhone portrait: keep chips large; never drop to tiny sm sizes
+    if (total <= 5 && groups <= 2) return 40;
+    if (total <= 8 && maxN <= 5) return 36;
+    if (total <= 12 && maxN <= 7) return 32;
+    if (total <= 18) return 28;
+    return 26;
+  }
+
+  function renderObjectGroup(n, kind) {
     const wrap = document.createElement("div");
-    wrap.className = "obj-group" + (size ? " " + size : "");
+    wrap.className = "obj-group";
     wrap.setAttribute("aria-label", String(n));
     wrap.dataset.count = String(n);
     const k = kind || "cubes";
@@ -285,7 +300,6 @@
         const dot = document.createElement("span");
         dot.className = "obj-dot";
         dot.style.background = DOT_COLORS[i % DOT_COLORS.length];
-        // Keep a dominant tint via outline color for the group
         if (i === 0) wrap.style.setProperty("--obj-accent", color);
         wrap.appendChild(dot);
       }
@@ -299,7 +313,6 @@
         wrap.appendChild(s);
       }
     } else {
-      // stars
       wrap.classList.add("obj-emoji");
       const emoji = STAR_EMOJIS[(count - 1) % STAR_EMOJIS.length];
       for (let i = 0; i < count; i++) {
@@ -355,9 +368,32 @@
   function renderViz(parts, size, q) {
     const el = $("block-viz");
     el.innerHTML = "";
+    el.classList.remove("has-objects");
+    el.style.removeProperty("--obj-chip");
     // parts: array of {n} or {op: '+'} or {op: '='} or {blank: true}
     const useSize = size || (parts.filter((p) => p.n != null).every((p) => p.n <= 5) ? "lg" : "");
     const modes = q && q.operandModes ? q.operandModes.slice() : null;
+    const card = el.closest(".question-card");
+    if (card) card.classList.remove("card-objects");
+
+    // Pre-scan object counts so every group shares one chip size
+    const objCounts = [];
+    if (q && (q.displayMode === "objects" || q.displayMode === "mixed")) {
+      let scanIdx = 0;
+      parts.forEach((p) => {
+        if (p.n == null) return;
+        const mode = modes ? modes[scanIdx] : (q.displayMode === "objects" ? "objects" : "numeral");
+        scanIdx++;
+        if (mode === "objects") objCounts.push(p.n);
+      });
+    }
+    const hasObjects = objCounts.length > 0;
+    if (hasObjects) {
+      el.classList.add("has-objects");
+      if (card) card.classList.add("card-objects");
+      el.style.setProperty("--obj-chip", pickUniformChipPx(objCounts) + "px");
+    }
+
     let numIdx = 0;
     parts.forEach((p) => {
       if (p.op) {
@@ -375,11 +411,9 @@
         const mode = modes ? modes[numIdx] : "numeral";
         numIdx++;
         if (mode === "objects" && q && q.objectKind) {
-          const ogSize = p.n <= 5 ? "lg" : p.n > 7 ? "sm" : "";
-          el.appendChild(renderObjectGroup(p.n, q.objectKind, ogSize || useSize));
+          el.appendChild(renderObjectGroup(p.n, q.objectKind));
         } else if (q && q.displayMode === "objects") {
-          // Full objects mode without per-operand (shouldn't happen) — still objects
-          el.appendChild(renderObjectGroup(p.n, (q && q.objectKind) || "cubes", useSize || (p.n > 6 ? "sm" : "")));
+          el.appendChild(renderObjectGroup(p.n, (q && q.objectKind) || "cubes"));
         } else {
           el.appendChild(renderBlockTower(p.n, useSize || (p.n > 6 ? "sm" : "")));
         }
@@ -665,6 +699,10 @@
     if (q.type === "compose" && q.mode === "drag") {
       const el = $("block-viz");
       el.innerHTML = "";
+      el.classList.remove("has-objects");
+      el.style.removeProperty("--obj-chip");
+      const card = el.closest(".question-card");
+      if (card) card.classList.remove("card-objects");
       const big = document.createElement("div");
       big.className = "compose-big-target";
       big.textContent = String(q.target);
@@ -672,7 +710,12 @@
     } else if (q.viz && q.viz.length) {
       renderViz(q.viz, null, q);
     } else {
-      $("block-viz").innerHTML = "";
+      const el = $("block-viz");
+      el.innerHTML = "";
+      el.classList.remove("has-objects");
+      el.style.removeProperty("--obj-chip");
+      const card = el.closest(".question-card");
+      if (card) card.classList.remove("card-objects");
     }
     const fb = $("feedback");
     fb.hidden = true;

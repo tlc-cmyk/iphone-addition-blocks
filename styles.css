@@ -268,15 +268,32 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  flex: 1 1 auto;
+  width: 100%;
+}
+.question-card.card-objects {
+  flex: 1 1 auto;
+  justify-content: space-evenly;
+  padding: 16px 12px 18px;
+  min-height: clamp(200px, 42dvh, 420px);
 }
 .block-viz {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  align-items: flex-end;
-  gap: 8px;
+  align-items: center;
+  align-content: center;
+  gap: 10px 14px;
   margin-bottom: 12px;
   min-height: 64px;
+  width: 100%;
+}
+.block-viz.has-objects {
+  flex: 1 1 auto;
+  min-height: clamp(140px, 28dvh, 300px);
+  margin-bottom: 8px;
+  gap: 12px 16px;
+  --obj-chip: 32px;
 }
 .block-viz .op {
   font-size: 1.6rem;
@@ -284,6 +301,10 @@ body {
   color: var(--bg2);
   padding: 0 4px;
   align-self: center;
+}
+.block-viz.has-objects .op {
+  font-size: clamp(1.75rem, 7vw, 2.25rem);
+  padding: 0 6px;
 }
 .question-text {
   font-size: clamp(1.45rem, 6.5vw, 1.85rem);
@@ -305,6 +326,7 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-top: auto;
+  flex-shrink: 0;
 }
 .choice-btn {
   min-height: var(--tap);
@@ -804,54 +826,57 @@ body {
   }
 }
 
-/* —— Pictorial count groups (dots / cubes / emoji) —— */
+/* —— Pictorial count groups (dots / cubes / emoji) ——
+   Uniform chip size via --obj-chip on .block-viz (set in JS).
+   No per-group lg/sm — every shape in a question matches. */
 .obj-group {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  max-width: 132px;
-  padding: 6px 8px;
-  border-radius: 14px;
+  gap: calc(var(--obj-chip, 32px) * 0.22);
+  max-width: min(240px, 52vw);
+  padding: calc(var(--obj-chip, 32px) * 0.28) calc(var(--obj-chip, 32px) * 0.34);
+  border-radius: 16px;
   background: #f3f0ff;
   vertical-align: middle;
+  flex: 0 1 auto;
 }
-.obj-group.lg { max-width: 160px; gap: 6px; padding: 8px 10px; }
-.obj-group.sm { max-width: 110px; gap: 4px; padding: 4px 6px; }
 
 .obj-cube {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
+  width: var(--obj-chip, 32px);
+  height: var(--obj-chip, 32px);
+  border-radius: calc(var(--obj-chip, 32px) * 0.22);
   display: inline-block;
+  flex: 0 0 auto;
   box-shadow:
     inset 0 -2px 0 rgba(0,0,0,0.18),
     inset 0 1px 0 rgba(255,255,255,0.35),
     0 2px 4px rgba(0,0,0,0.15);
   border: 1.5px solid rgba(255,255,255,0.4);
 }
-.obj-group.lg .obj-cube { width: 26px; height: 26px; border-radius: 6px; }
-.obj-group.sm .obj-cube { width: 16px; height: 16px; border-radius: 4px; }
 
 .obj-dot {
-  width: 16px;
-  height: 16px;
+  width: var(--obj-chip, 32px);
+  height: var(--obj-chip, 32px);
   border-radius: 50%;
   display: inline-block;
+  flex: 0 0 auto;
   box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15), 0 2px 3px rgba(0,0,0,0.12);
   border: 1.5px solid rgba(255,255,255,0.45);
 }
-.obj-group.lg .obj-dot { width: 20px; height: 20px; }
-.obj-group.sm .obj-dot { width: 12px; height: 12px; }
 
 .obj-emoji-item {
-  font-size: 1.15rem;
+  font-size: calc(var(--obj-chip, 32px) * 0.92);
   line-height: 1;
+  width: var(--obj-chip, 32px);
+  height: var(--obj-chip, 32px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   filter: drop-shadow(0 1px 1px rgba(0,0,0,0.12));
 }
-.obj-group.lg .obj-emoji-item { font-size: 1.35rem; }
-.obj-group.sm .obj-emoji-item { font-size: 0.95rem; }
 
 .question-text.prompt-objects {
   font-size: clamp(1.1rem, 4.8vw, 1.35rem);
